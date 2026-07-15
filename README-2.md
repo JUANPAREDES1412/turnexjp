@@ -73,7 +73,24 @@ Con esto:
 - La contraseña (hash) nunca se envía al navegador, sin importar qué se consulte.
 - Si instalas la app **desde cero** hoy, no necesitas `security_upgrade.sql` por separado: ya está incluido dentro de `schema.sql`.
 
-## 🆕 Nuevas funcionalidades (aplicar si ya tenías la app instalada)
+## 🔧 Corrección crítica + límite de empleados (aplicar ahora)
+
+Se encontró un error real en la actualización anterior: la función que identifica "quién eres"
+al llamar ciertas acciones protegidas no leía el token de sesión de forma confiable. Esto
+afectaba silenciosamente: **crear empleados/administradores, restablecer claves, marcar
+entrada/salida, cerrar nómina, y copias de seguridad.** Ya está corregido.
+
+También se agregó el **límite de empleados por empresa**, que solo el propietario puede definir
+(al crear o editar una empresa, elige entre 20, 50, 100, 200 o 1000 empleados). El panel del
+administrador muestra "Empleados (usados / límite)" y bloquea la creación de nuevos empleados
+al llegar al tope, mostrando un aviso para contactar al propietario.
+
+**Para aplicarlo:**
+1. Supabase → **SQL Editor** → **New query** → pega **todo** el contenido de `update_3.sql` → **Run**.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+## Nuevas funcionalidades (aplicar si ya tenías la app instalada)
 
 **Para aplicarlas:**
 1. En Supabase → **Database → Extensions** → busca **pg_cron** → actívala (necesaria para la copia de seguridad diaria automática).
