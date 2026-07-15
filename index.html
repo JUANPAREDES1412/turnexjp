@@ -411,13 +411,18 @@ async function renderOwner(){
 async function ownerEmpresasTab(){
   const {data: companies} = await APP.sb.from('companies').select('*').order('created_at', {ascending:false});
   APP.companiesCache = companies || [];
+  const {data: allEmployees} = await APP.sb.from('app_users').select('company_id').eq('role','employee');
+  const counts = {};
+  (allEmployees||[]).forEach(u=>{ counts[u.company_id] = (counts[u.company_id]||0)+1; });
   const rows = (companies||[]).map(c=>{
     const cid = saveCache(c);
+    const used = counts[c.id]||0;
     return `<tr>
       <td><b>${esc(c.name)}</b><div class="small">${esc(c.legal_id||'—')}</div></td>
       <td>${esc(countryName(c.country))}</td>
       <td>${esc(c.city||'—')}</td>
       <td>${esc(c.default_currency)}</td>
+      <td class="num">${used} / ${c.max_employees||50}</td>
       <td>${c.active? '<span class="pill pill-ok">Activa</span>' : '<span class="pill pill-off">Inactiva</span>'}</td>
       <td style="text-align:right;">
         <button class="btn btn-ghost btn-sm" onclick="openCompanyModal('${cid}')">Editar</button>
@@ -430,8 +435,8 @@ async function ownerEmpresasTab(){
     <div class="toolbar"><h3 style="margin:0;">Empresas registradas (${(companies||[]).length})</h3>
       <div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Nueva empresa</button></div>
     </div>
-    <div class="table-scroll"><table><thead><tr><th>Empresa</th><th>País</th><th>Ciudad</th><th>Moneda</th><th>Estado</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" class="empty-state">Aún no hay empresas. Crea la primera.</td></tr>'}</tbody></table></div>
+    <div class="table-scroll"><table><thead><tr><th>Empresa</th><th>País</th><th>Ciudad</th><th>Moneda</th><th>Empleados</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="empty-state">Aún no hay empresas. Crea la primera.</td></tr>'}</tbody></table></div>
   </div>`;
 }
 function countryName(code){ const f = COUNTRIES.find(c=>c.code===code); return f? f.name : code; }
@@ -460,6 +465,11 @@ function openCompanyModal(cacheId){
       <div class="field"><label>Correo</label><input id="cEmail" value="${esc(c?.email||'')}"></div>
     </div>
     <div class="field"><label>Dirección</label><input id="cAddress" value="${esc(c?.address||'')}"></div>
+    <div class="field"><label>Límite de empleados permitidos</label>
+      <select id="cMaxEmployees">
+        ${[20,50,100,200,1000].map(n=>`<option value="${n}" ${(c?.max_employees||50)===n?'selected':''}>De 1 a ${n} empleados</option>`).join('')}
+      </select>
+    </div>
     <button class="btn btn-primary btn-block" onclick="submitCompany('${c?.id||''}')">${c? 'Guardar cambios':'Crear empresa'}</button>
   </div>`;
   document.body.appendChild(modal);
@@ -475,6 +485,7 @@ async function submitCompany(existingId){
     phone: $('#cPhone').value.trim(),
     email: $('#cEmail').value.trim(),
     address: $('#cAddress').value.trim(),
+    max_employees: parseInt($('#cMaxEmployees').value, 10) || 50,
   };
   if(!payload.name) return $('#companyModalMsg').innerHTML = `<div class="msg msg-err">El nombre es obligatorio.</div>`;
   let error;
@@ -690,6 +701,9 @@ async function getLocations(){
 
 async function adminEmpleadosTab(){
   const emps = await getEmployeesFull();
+  const {data: companyRow} = await APP.sb.from('companies').select('max_employees').eq('id', APP.session.company_id).single();
+  const limit = companyRow?.max_employees || 50;
+  const atLimit = emps.length >= limit;
   const rows = emps.map(e=>{
     const cid = saveCache(e);
     const u = e.app_users;
@@ -709,9 +723,10 @@ async function adminEmpleadosTab(){
   }).join('');
   return `
   <div class="card">
-    <div class="toolbar"><h3 style="margin:0;">Empleados (${emps.length})</h3>
-      <div class="actions"><button class="btn btn-primary" onclick="openEmployeeModal()">+ Nuevo empleado</button></div>
+    <div class="toolbar"><h3 style="margin:0;">Empleados (${emps.length} / ${limit})</h3>
+      <div class="actions"><button class="btn btn-primary" ${atLimit?'disabled':''} onclick="openEmployeeModal()">+ Nuevo empleado</button></div>
     </div>
+    ${atLimit? `<div class="locked-note">Alcanzaste el límite de ${limit} empleados permitido para tu empresa. Contacta al propietario de la plataforma para aumentarlo.</div>`:''}
     <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Cargo</th><th>Ubicación</th><th>Tarifa/hora</th><th>Horas pactadas</th><th>Estado</th><th></th></tr></thead>
     <tbody>${rows || '<tr><td colspan="7" class="empty-state">Aún no hay empleados. Crea el primero.</td></tr>'}</tbody></table></div>
   </div>`;
