@@ -205,8 +205,8 @@ const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
    La "anon public key" está diseñada para ser pública en apps web.
 --------------------------------------------------------------------- */
 const SUPABASE_CONFIG = {
-  url: 'https://ilvdpsxofivgjqiezqgb.supabase.co',       // ej: https://abcdefgh.supabase.co
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdmRwc3hvZml2Z2pxaWV6cWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDk1OTUsImV4cCI6MjA5Njc4NTU5NX0._YeRr14VRy82Fy2YyiK9HpObdw4sabPtDIvAYZZnPVk'
+  url: 'PEGA_AQUI_TU_SUPABASE_URL',       // ej: https://abcdefgh.supabase.co
+  anonKey: 'PEGA_AQUI_TU_SUPABASE_ANON_KEY'
 };
 function isConfigured(v){ return v && !v.startsWith('PEGA_AQUI'); }
 function getConfigUrl(){ return isConfigured(SUPABASE_CONFIG.url) ? SUPABASE_CONFIG.url : localStorage.getItem('turnex_sb_url'); }
@@ -1297,37 +1297,67 @@ function exportPayroll(){
 function adminReportesTab(){
   return `
   <div class="card">
-    <h3>Reportes en Excel</h3>
-    <p class="small">Descarga la información de tu empresa lista para análisis o archivo.</p>
+    <h3>Reportes</h3>
+    <p class="small">Genera cualquier reporte para verlo aquí mismo en la pantalla; desde el resultado puedes exportarlo a Excel si lo necesitas.</p>
     <div class="toolbar"><div></div><div class="actions">
       <button class="btn btn-ghost" onclick="reportEmpleados()">Empleados</button>
       <button class="btn btn-ghost" onclick="reportUbicaciones()">Ubicaciones</button>
       <button class="btn btn-ghost" onclick="reportTareas()">Tareas</button>
       <button class="btn btn-ghost" onclick="openReportShiftsModal()">Turnos y horas por rango de fechas</button>
       <button class="btn btn-ghost" onclick="openReportAbsencesModal()">Inasistencias por rango de fechas</button>
+      <button class="btn btn-accent" onclick="openReportHorasModal()">Horas y liquidación por empleado</button>
     </div></div>
-  </div>`;
+  </div>
+  <div id="reportResultArea"></div>`;
 }
+function renderReportResult(title, columns, rows, filenamePrefix, exportData){
+  const tableRows = rows.map(r=>`<tr>${columns.map(c=>`<td class="${c.num?'num':''}">${esc(r[c.key]??'—')}</td>`).join('')}</tr>`).join('');
+  APP.cache['_lastReportExport'] = {data: exportData, filename: `${filenamePrefix}_${todayISO()}.xlsx`};
+  $('#reportResultArea').innerHTML = `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">${esc(title)} (${rows.length})</h3>
+      <div class="actions"><button class="btn btn-accent" onclick="exportLastReport()">Exportar a Excel</button></div>
+    </div>
+    <div class="table-scroll"><table><thead><tr>${columns.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr></thead>
+    <tbody>${tableRows || `<tr><td colspan="${columns.length}" class="empty-state">Sin datos para mostrar.</td></tr>`}</tbody></table></div>
+  </div>`;
+  $('#reportResultArea').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function exportLastReport(){
+  const r = APP.cache['_lastReportExport'];
+  if(!r) return;
+  exportToExcel(r.filename, r.data);
+}
+
 async function reportEmpleados(){
   const emps = await getEmployeesFull();
   const data = emps.map(e=>({Nombre:e.app_users?.full_name, Usuario:e.app_users?.username, Correo:e.app_users?.email, Cargo:e.position, Ubicacion:e.locations?.name, Tarifa_hora:e.hourly_rate, Moneda:e.currency, Horas_semana:e.contracted_hours_week, Ingreso:e.hire_date, Activo: e.app_users?.active?'Sí':'No'}));
-  exportToExcel(`empleados_${todayISO()}.xlsx`, data);
+  renderReportResult('Empleados', [
+    {key:'Nombre',label:'Nombre'},{key:'Usuario',label:'Usuario'},{key:'Cargo',label:'Cargo'},{key:'Ubicacion',label:'Ubicación'},
+    {key:'Tarifa_hora',label:'Tarifa/hora',num:true},{key:'Moneda',label:'Moneda'},{key:'Horas_semana',label:'Horas/sem',num:true},{key:'Activo',label:'Activo'}
+  ], data, 'empleados', data);
 }
 async function reportUbicaciones(){
   const locs = await getLocations();
-  exportToExcel(`ubicaciones_${todayISO()}.xlsx`, locs.map(l=>({Nombre:l.name, Ciudad:l.city, Pais:l.country, Direccion:l.address, Activa:l.active?'Sí':'No'})));
+  const data = locs.map(l=>({Nombre:l.name, Ciudad:l.city, Pais:l.country, Direccion:l.address, Activa:l.active?'Sí':'No'}));
+  renderReportResult('Ubicaciones', [
+    {key:'Nombre',label:'Nombre'},{key:'Ciudad',label:'Ciudad'},{key:'Pais',label:'País'},{key:'Direccion',label:'Dirección'},{key:'Activa',label:'Activa'}
+  ], data, 'ubicaciones', data);
 }
 async function reportTareas(){
   const {data: tasks} = await APP.sb.from('tasks').select('*, employees:employee_id(*, app_users:user_id(full_name))').eq('company_id', APP.session.company_id);
-  exportToExcel(`tareas_${todayISO()}.xlsx`, (tasks||[]).map(t=>({Titulo:t.title, Descripcion:t.description, Asignado_a:t.employees?.app_users?.full_name||'—', Vence:t.due_date, Estado:t.status, Requiere_foto:t.requires_photo?'Sí':'No'})));
+  const data = (tasks||[]).map(t=>({Titulo:t.title, Descripcion:t.description, Asignado_a:t.employees?.app_users?.full_name||'—', Vence:t.due_date, Estado:t.status, Requiere_foto:t.requires_photo?'Sí':'No'}));
+  renderReportResult('Tareas', [
+    {key:'Titulo',label:'Tarea'},{key:'Asignado_a',label:'Asignada a'},{key:'Vence',label:'Vence'},{key:'Estado',label:'Estado'},{key:'Requiere_foto',label:'Requiere foto'}
+  ], data, 'tareas', data);
 }
 function openReportShiftsModal(){
   const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='repShiftModal';
   modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('repShiftModal')">✕</button>
-  <h3>Exportar turnos y horas por rango de fechas</h3>
+  <h3>Turnos y horas por rango de fechas</h3>
   <div class="row"><div class="field"><label>Desde</label><input type="date" id="rsStart" value="${todayISO()}"></div>
   <div class="field"><label>Hasta</label><input type="date" id="rsEnd" value="${todayISO()}"></div></div>
-  <button class="btn btn-primary btn-block" onclick="reportShifts()">Exportar</button>
+  <button class="btn btn-primary btn-block" onclick="reportShifts()">Ver reporte</button>
   </div>`;
   document.body.appendChild(modal);
 }
@@ -1335,23 +1365,28 @@ async function reportShifts(){
   const start = $('#rsStart').value, end = $('#rsEnd').value;
   await refreshAbsences();
   const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name)), locations:location_id(name), time_entries(*)').eq('company_id', APP.session.company_id).gte('shift_date', start).lte('shift_date', end).order('shift_date');
-  exportToExcel(`turnos_${start}_a_${end}.xlsx`, (shifts||[]).map(s=>{
+  const data = (shifts||[]).map(s=>{
     const te = (s.time_entries||[])[0];
     return {Fecha:s.shift_date, Empleado:s.employees?.app_users?.full_name, Ubicacion:s.locations?.name||'—',
-      Inicio_programado:s.start_time, Fin_programado:s.end_time, Estado:s.status,
+      Inicio_programado:s.start_time?.slice(0,5), Fin_programado:s.end_time?.slice(0,5), Estado:s.status,
       Entrada_marcada: te?.clock_in ? new Date(te.clock_in).toLocaleString('es-CO') : '—',
       Salida_marcada: te?.clock_out ? new Date(te.clock_out).toLocaleString('es-CO') : '—',
       Horas_reales: te?.hours_worked || '—', Notas:s.notes};
-  }));
+  });
   closeModal('repShiftModal');
+  renderReportResult(`Turnos y horas (${start} a ${end})`, [
+    {key:'Fecha',label:'Fecha'},{key:'Empleado',label:'Empleado'},{key:'Ubicacion',label:'Ubicación'},
+    {key:'Inicio_programado',label:'Inicio',num:true},{key:'Fin_programado',label:'Fin',num:true},{key:'Estado',label:'Estado'},
+    {key:'Entrada_marcada',label:'Entrada real'},{key:'Salida_marcada',label:'Salida real'},{key:'Horas_reales',label:'Horas',num:true}
+  ], data, `turnos_${start}_a_${end}`, data);
 }
 function openReportAbsencesModal(){
   const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='repAbsModal';
   modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('repAbsModal')">✕</button>
-  <h3>Exportar inasistencias por rango de fechas</h3>
+  <h3>Inasistencias por rango de fechas</h3>
   <div class="row"><div class="field"><label>Desde</label><input type="date" id="raStart" value="${todayISO()}"></div>
   <div class="field"><label>Hasta</label><input type="date" id="raEnd" value="${todayISO()}"></div></div>
-  <button class="btn btn-primary btn-block" onclick="reportAbsences()">Exportar</button>
+  <button class="btn btn-primary btn-block" onclick="reportAbsences()">Ver reporte</button>
   </div>`;
   document.body.appendChild(modal);
 }
@@ -1360,11 +1395,63 @@ async function reportAbsences(){
   await refreshAbsences();
   const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name)), locations:location_id(name)')
     .eq('company_id', APP.session.company_id).eq('status','absent').gte('shift_date', start).lte('shift_date', end).order('shift_date');
-  exportToExcel(`inasistencias_${start}_a_${end}.xlsx`, (shifts||[]).map(s=>({
+  const data = (shifts||[]).map(s=>({
     Fecha:s.shift_date, Empleado:s.employees?.app_users?.full_name, Cargo:s.employees?.position,
     Ubicacion:s.locations?.name||'—', Turno_programado:`${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}`, Notas:s.notes
-  })));
+  }));
   closeModal('repAbsModal');
+  renderReportResult(`Inasistencias (${start} a ${end})`, [
+    {key:'Fecha',label:'Fecha'},{key:'Empleado',label:'Empleado'},{key:'Cargo',label:'Cargo'},
+    {key:'Ubicacion',label:'Ubicación'},{key:'Turno_programado',label:'Turno programado'}
+  ], data, `inasistencias_${start}_a_${end}`, data);
+}
+
+/* ---- Reporte de horas y liquidación por empleado (con filtro) ---- */
+async function openReportHorasModal(){
+  const emps = await getEmployeesFull();
+  const today = new Date();
+  const defStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+  const defEnd = todayISO();
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='repHorasModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('repHorasModal')">✕</button>
+  <h3>Horas y liquidación por empleado</h3>
+  <p class="small">El valor a liquidar se calcula únicamente como: tarifa por hora × horas reales trabajadas en el rango elegido.</p>
+  <div class="field"><label>Empleado</label><select id="rhEmployee"><option value="">Todos los empleados</option>${emps.map(e=>`<option value="${e.id}">${esc(e.app_users?.full_name)}</option>`).join('')}</select></div>
+  <div class="row"><div class="field"><label>Desde</label><input type="date" id="rhStart" value="${defStart}"></div>
+  <div class="field"><label>Hasta</label><input type="date" id="rhEnd" value="${defEnd}"></div></div>
+  <button class="btn btn-primary btn-block" onclick="reportHoras()">Ver reporte</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function reportHoras(){
+  const empId = $('#rhEmployee').value;
+  const start = $('#rhStart').value, end = $('#rhEnd').value;
+  await refreshAbsences();
+  const emps = await getEmployeesFull();
+  const targetEmps = empId ? emps.filter(e=>e.id===empId) : emps;
+  const {data: shifts} = await APP.sb.from('shifts').select('*, time_entries(*)').eq('company_id', APP.session.company_id)
+    .gte('shift_date', start).lte('shift_date', end).eq('status','completed');
+
+  const results = targetEmps.map(e=>{
+    const empShifts = (shifts||[]).filter(s=>s.employee_id===e.id);
+    const hours = empShifts.reduce((sum,s)=>{
+      const entry = (s.time_entries||[])[0];
+      if(entry && entry.hours_worked){ return sum + Number(entry.hours_worked); }
+      const [sh,sm] = s.start_time.split(':').map(Number);
+      const [eh,em] = s.end_time.split(':').map(Number);
+      let diff = (eh*60+em) - (sh*60+sm);
+      if(diff<0) diff += 24*60;
+      return sum + diff/60;
+    }, 0);
+    const rate = Number(e.hourly_rate||0);
+    const amount = rate * hours; // tarifa por hora × horas reales trabajadas, sin ningún otro cálculo
+    return {Empleado: e.app_users?.full_name, Cargo: e.position, Horas_trabajadas: +hours.toFixed(2), Tarifa_hora: rate, Moneda: e.currency, Monto_a_pagar: +amount.toFixed(2)};
+  });
+  closeModal('repHorasModal');
+  renderReportResult(`Horas y liquidación (${start} a ${end})`, [
+    {key:'Empleado',label:'Empleado'},{key:'Cargo',label:'Cargo'},{key:'Horas_trabajadas',label:'Horas trabajadas',num:true},
+    {key:'Tarifa_hora',label:'Tarifa/hora',num:true},{key:'Moneda',label:'Moneda'},{key:'Monto_a_pagar',label:'Monto a pagar',num:true}
+  ], results, `horas_liquidacion_${start}_a_${end}`, results);
 }
 
 function adminAccountTab(){
