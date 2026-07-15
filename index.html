@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turnex · Control de Turnos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#F3F5F6;
+  --surface:#FFFFFF;
+  --ink:#16222B;
+  --ink-soft:#5B6B76;
+  --primary:#0F3D3E;
+  --primary-light:#186B69;
+  --accent:#E8A33D;
+  --danger:#C1443A;
+  --danger-bg:#FBEAE8;
+  --success:#2E7D5B;
+  --success-bg:#E9F5EF;
+  --border:#E1E6E9;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,.brand{font-family:'Space Grotesk',sans-serif;}
+.num{font-variant-numeric:tabular-nums;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;font-size:14px;}
+a{color:var(--primary-light);}
+
+/* ---- layout shells ---- */
+.center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px 34px;width:100%;max-width:400px;box-shadow:0 20px 50px -20px rgba(15,61,62,0.25);}
+.brand-mark{display:flex;align-items:center;gap:10px;margin-bottom:22px;}
+.brand-mark .dot-ring{width:34px;height:34px;border-radius:50%;border:3px solid var(--primary);position:relative;flex:none;}
+.brand-mark .dot-ring::after{content:'';position:absolute;width:3px;height:11px;background:var(--accent);top:5px;left:calc(50% - 1.5px);border-radius:2px;transform-origin:bottom center;transform:rotate(35deg);}
+.brand-mark .name{font-size:20px;font-weight:700;color:var(--primary);letter-spacing:-0.02em;}
+.brand-mark .sub{font-size:11px;color:var(--ink-soft);margin-top:-2px;}
+
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--ink);}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(24,107,105,0.12);}
+.row{display:flex;gap:12px;}
+.row > .field{flex:1;}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;border:none;font-weight:600;font-size:13.5px;transition:filter .12s;}
+.btn:hover{filter:brightness(1.07);}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-accent{background:var(--accent);color:#241A05;}
+.btn-ghost{background:transparent;color:var(--primary);border:1px solid var(--border);}
+.btn-danger{background:var(--danger-bg);color:var(--danger);}
+.btn-sm{padding:6px 10px;font-size:12.5px;border-radius:6px;}
+.btn-block{width:100%;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.tabbar{display:flex;gap:6px;margin-bottom:18px;background:#EAEDEE;padding:4px;border-radius:10px;width:fit-content;}
+.tabbar button{padding:8px 14px;border:none;background:transparent;border-radius:7px;font-weight:600;color:var(--ink-soft);font-size:13px;}
+.tabbar button.active{background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+.msg{padding:9px 12px;border-radius:7px;font-size:13px;margin-bottom:14px;}
+.msg-err{background:var(--danger-bg);color:var(--danger);}
+.msg-ok{background:var(--success-bg);color:var(--success);}
+
+/* ---- app shell ---- */
+.shell{display:flex;min-height:100vh;}
+.sidebar{width:220px;flex:none;background:var(--primary);color:#fff;display:flex;flex-direction:column;padding:20px 14px;}
+.sidebar .brand-mark .name,.sidebar .brand-mark .sub{color:#fff;}
+.sidebar .brand-mark .dot-ring{border-color:#fff;}
+.sidebar .brand-mark .dot-ring::after{background:var(--accent);}
+.sidebar nav{margin-top:10px;display:flex;flex-direction:column;gap:2px;}
+.sidebar nav button{text-align:left;padding:10px 12px;border:none;background:transparent;color:rgba(255,255,255,0.75);border-radius:8px;font-weight:600;font-size:13.5px;}
+.sidebar nav button.active{background:rgba(255,255,255,0.14);color:#fff;}
+.sidebar nav button:hover{background:rgba(255,255,255,0.1);color:#fff;}
+.sidebar .who{margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15);font-size:12px;color:rgba(255,255,255,0.6);}
+.sidebar .who b{color:#fff;display:block;font-size:13px;margin-bottom:8px;}
+.main{flex:1;padding:30px 36px;max-width:1180px;}
+.main h1{font-size:22px;margin:0 0 4px;}
+.main .lead{color:var(--ink-soft);font-size:13.5px;margin:0 0 22px;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:20px;}
+.card h3{margin:0 0 16px;font-size:15px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media (max-width:900px){.grid2{grid-template-columns:1fr;} .shell{flex-direction:column;} .sidebar{width:100%;flex-direction:row;flex-wrap:wrap;align-items:center;} .sidebar nav{flex-direction:row;flex-wrap:wrap;} .sidebar .who{width:100%;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.15);}}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:9px 10px;color:var(--ink-soft);font-weight:600;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.02em;}
+td{padding:9px 10px;border-bottom:1px solid #EEF1F2;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700;}
+.pill-ok{background:var(--success-bg);color:var(--success);}
+.pill-off{background:#EEE;color:#888;}
+.pill-sched{background:#E7EEFB;color:#2E5FA8;}
+.pill-done{background:var(--success-bg);color:var(--success);}
+.pill-absent{background:var(--danger-bg);color:var(--danger);}
+.pill-cancel{background:#EEE;color:#888;}
+.pill-pending{background:#FDF3E4;color:#946200;}
+.pill-progress{background:#E7EEFB;color:#2E5FA8;}
+
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.toolbar .actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* calendar */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.cal-head h3{margin:0;font-size:16px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.cal-dow{text-align:center;font-size:11px;font-weight:700;color:var(--ink-soft);padding-bottom:4px;text-transform:uppercase;}
+.cal-cell{min-height:78px;border:1px solid var(--border);border-radius:8px;padding:6px;background:#fbfcfc;cursor:pointer;transition:border-color .1s;}
+.cal-cell:hover{border-color:var(--primary-light);}
+.cal-cell.empty{background:transparent;border:none;cursor:default;}
+.cal-cell.today{border-color:var(--accent);border-width:2px;}
+.cal-cell .d{font-size:12px;font-weight:700;color:var(--ink-soft);}
+.cal-cell .shift-tag{font-size:10.5px;background:var(--primary);color:#fff;border-radius:4px;padding:1px 5px;margin-top:3px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.cal-cell .shift-tag.absent{background:var(--danger);}
+.cal-cell .shift-tag.done{background:var(--success);}
+.cal-cell .more{font-size:10px;color:var(--ink-soft);margin-top:2px;}
+
+.modal-bg{position:fixed;inset:0;background:rgba(15,25,30,0.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:50;}
+.modal{background:#fff;border-radius:14px;padding:26px 28px;width:100%;max-width:520px;box-shadow:0 30px 60px -20px rgba(0,0,0,.35);}
+.modal h3{margin-top:0;}
+.modal-close{float:right;border:none;background:transparent;font-size:18px;color:var(--ink-soft);}
+.empty-state{text-align:center;padding:40px 20px;color:var(--ink-soft);font-size:13.5px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+.kpi .v{font-size:24px;font-weight:700;color:var(--primary);font-family:'Space Grotesk',sans-serif;}
+.kpi .l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+.table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-scroll table{min-width:560px;}
+.badge-photo{display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#EEF2F3;color:var(--ink-soft);padding:2px 7px;border-radius:12px;margin-left:6px;}
+.photo-thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--border);margin:4px 4px 0 0;}
+.clock-btn{display:inline-flex;align-items:center;gap:6px;}
+.locked-note{font-size:12px;color:var(--ink-soft);background:#F3F5F6;border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:8px;}
+
+@media (max-width:600px){
+  .main{padding:16px;}
+  .main h1{font-size:19px;}
+  .card{padding:16px;border-radius:10px;}
+  .row{flex-direction:column;gap:0;}
+  .kpi-row{grid-template-columns:repeat(2,1fr);}
+  .modal{padding:20px 18px;border-radius:12px;}
+  .modal-bg{padding:16px 8px;align-items:center;}
+  .auth-card{padding:24px 20px;}
+  .cal-cell{min-height:52px;padding:4px;}
+  .cal-cell .shift-tag{font-size:9px;padding:0 3px;margin-top:2px;}
+  .cal-dow{font-size:9.5px;}
+  .toolbar{flex-direction:column;align-items:stretch;}
+  .toolbar .actions{flex-direction:column;}
+  .toolbar .actions .btn{width:100%;}
+  .tabbar{flex-wrap:wrap;width:100%;}
+  .sidebar{padding:14px 10px;}
+  .sidebar nav button{padding:8px 10px;font-size:12.5px;}
+}
+.small{font-size:12px;color:var(--ink-soft);}
+.link-btn{background:none;border:none;color:var(--primary-light);font-weight:600;padding:0;font-size:13px;}
+hr.sep{border:none;border-top:1px solid var(--border);margin:18px 0;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =====================================================================
+   TURNEX — App de control de turnos multi-empresa
+   Vanilla JS + Supabase. Todo el estado vive en APP.* y se re-renderiza
+   con funciones render*() que escriben innerHTML de #app.
+   ===================================================================== */
+
+const APP = {
+  sb: null,
+  session: null,      // {type:'owner'|'admin'|'employee', id, company_id, full_name, must_change_password}
+  companiesForLogin: [],
+  ratesCache: [],
+  companiesCache: [],
+  cache: {},           // cache genérico por id para lookups en handlers inline
+  calRef: new Date(),  // mes visible en calendario admin
+  calRefEmp: new Date(),
+  ownerTab: 'empresas',
+  adminTab: 'panel',
+  empTab: 'turnos',
+  ownerCompanyFocus: null, // empresa seleccionada en tab Administradores
+};
+
+const COUNTRIES = [
+  {code:'CO', name:'Colombia'},
+  {code:'US', name:'Estados Unidos'},
+  {code:'ES', name:'España'},
+  {code:'MX', name:'México'},
+  {code:'AR', name:'Argentina'},
+  {code:'DE', name:'Alemania'},
+  {code:'FR', name:'Francia'},
+  {code:'OT', name:'Otro'},
+];
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+function $(sel){ return document.querySelector(sel); }
+function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(){ return 'x'+Math.random().toString(36).slice(2,10); }
+function saveCache(obj){ const id = uid(); APP.cache[id] = obj; return id; }
+function fmtMoney(n, cur){ return (Number(n)||0).toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + cur; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function tok(){ return localStorage.getItem('turnex_token'); }
+
+/* ------------------------- INIT / CONFIG ------------------------- */
+window.addEventListener('load', init);
+
+function buildClient(url, key, token){
+  const opts = token ? { global: { headers: { 'x-session-token': token } } } : {};
+  return supabase.createClient(url, key, opts);
+}
+function applySessionHeader(token){
+  const url = localStorage.getItem('turnex_sb_url');
+  const key = localStorage.getItem('turnex_sb_key');
+  if(token) localStorage.setItem('turnex_token', token);
+  APP.sb = buildClient(url, key, token);
+}
+
+async function init(){
+  const url = localStorage.getItem('turnex_sb_url');
+  const key = localStorage.getItem('turnex_sb_key');
+  if(!url || !key){ renderSetup(); return; }
+  const savedToken = localStorage.getItem('turnex_token');
+  try{
+    APP.sb = buildClient(url, key, savedToken);
+  }catch(e){ renderSetup('No se pudo inicializar Supabase. Revisa la URL y la llave.'); return; }
+  const sess = localStorage.getItem('turnex_session');
+  if(sess && savedToken){
+    try{
+      APP.session = JSON.parse(sess);
+      await routeToDashboard();
+      return;
+    }catch(e){ localStorage.removeItem('turnex_session'); localStorage.removeItem('turnex_token'); }
+  }
+  renderLogin();
+}
+
+function renderSetup(err){
+  document.title = 'Turnex · Configuración';
+  $('#app').innerHTML = `
+  <div class="center-screen">
+    <div class="auth-card">
+      ${brandMark()}
+      <h3 style="margin-top:0;font-size:15px;">Conectar con Supabase</h3>
+      <p class="small" style="margin-top:-8px;">Pega la URL y la llave anónima ("anon public") de tu proyecto Supabase. Se guardan solo en este navegador.</p>
+      ${err? `<div class="msg msg-err">${esc(err)}</div>`:''}
+      <div class="field"><label>Supabase URL</label><input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+      <div class="field"><label>Supabase anon public key</label><input id="cfgKey" placeholder="eyJhbGciOi..."></div>
+      <button class="btn btn-primary btn-block" onclick="saveConfig()">Guardar y continuar</button>
+      <p class="small" style="margin-top:14px;">¿Primera vez? Corre <code>schema.sql</code> en el SQL Editor de tu proyecto Supabase antes de continuar, y crea el propietario con <code>select bootstrap_owner('usuario','clave','Nombre');</code></p>
+    </div>
+  </div>`;
+}
+function saveConfig(){
+  const url = $('#cfgUrl').value.trim();
+  const key = $('#cfgKey').value.trim();
+  if(!url || !key){ return; }
+  localStorage.setItem('turnex_sb_url', url);
+  localStorage.setItem('turnex_sb_key', key);
+  location.reload();
+}
+
+function brandMark(){
+  return `<div class="brand-mark"><div class="dot-ring"></div><div><div class="name">Turnex</div><div class="sub">Control de turnos</div></div></div>`;
+}
+
+/* ------------------------- LOGIN ------------------------- */
+async function renderLogin(msg, isErr){
+  document.title = 'Turnex · Ingresar';
+  $('#app').innerHTML = `
+  <div class="center-screen">
+    <div class="auth-card">
+      ${brandMark()}
+      ${msg? `<div class="msg ${isErr?'msg-err':'msg-ok'}">${esc(msg)}</div>`:''}
+      <div class="field"><label>Usuario</label><input id="loginUser" placeholder="Tu usuario" autocomplete="username"></div>
+      <div class="field"><label>Clave</label><input id="loginPass" type="password" placeholder="Tu clave" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-block" onclick="doUnifiedLogin()">Ingresar</button>
+      <p class="small" style="margin-top:16px;text-align:center;"><button class="link-btn" onclick="renderSetup()">Cambiar conexión Supabase</button></p>
+    </div>
+  </div>`;
+  // permitir Enter para ingresar
+  const pass = $('#loginPass');
+  if(pass) pass.addEventListener('keydown', (e)=>{ if(e.key==='Enter') doUnifiedLogin(); });
+}
+async function doUnifiedLogin(){
+  const username = $('#loginUser').value.trim();
+  const password = $('#loginPass').value;
+  if(!username||!password) return renderLogin('Completa usuario y clave', true);
+  const {data, error} = await APP.sb.rpc('login_unified', {p_username: username, p_password: password});
+  if(error || !data || data.length===0) return renderLogin('Usuario o clave incorrectos', true);
+  const row = data[0];
+  applySessionHeader(row.token);
+  APP.session = {type: row.actor_type, id: row.id, company_id: row.company_id, full_name: row.full_name, must_change_password: row.must_change_password};
+  localStorage.setItem('turnex_session', JSON.stringify(APP.session));
+  routeToDashboard();
+}
+function logout(){
+  try{
+    const token = localStorage.getItem('turnex_token');
+    if(token && APP.sb){ APP.sb.rpc('logout_session', {p_token: token}).then(()=>{}, ()=>{}); }
+  }catch(e){ /* ignorar: la limpieza local de abajo debe ocurrir siempre */ }
+  localStorage.removeItem('turnex_session');
+  localStorage.removeItem('turnex_token');
+  APP.session = null;
+  location.reload();
+}
+
+async function routeToDashboard(){
+  if(!APP.session) return renderLogin();
+  if(APP.session.type==='owner') return renderOwner();
+  if(APP.session.must_change_password) return renderForceChangePassword();
+  if(APP.session.type==='admin') return renderAdmin();
+  if(APP.session.type==='employee') return renderEmployee();
+  renderLogin();
+}
+
+function renderForceChangePassword(){
+  document.title = 'Turnex · Cambiar clave';
+  $('#app').innerHTML = `
+  <div class="center-screen">
+    <div class="auth-card">
+      ${brandMark()}
+      <h3 style="margin-top:0;">Primer ingreso: define tu clave</h3>
+      <p class="small">Por seguridad debes establecer una nueva clave personal antes de continuar.</p>
+      <div id="fcpMsg"></div>
+      <div class="field"><label>Nueva clave</label><input id="fcpPass" type="password"></div>
+      <div class="field"><label>Confirmar clave</label><input id="fcpPass2" type="password"></div>
+      <button class="btn btn-primary btn-block" onclick="submitForceChange()">Guardar clave y continuar</button>
+    </div>
+  </div>`;
+}
+async function submitForceChange(){
+  const p1 = $('#fcpPass').value, p2 = $('#fcpPass2').value;
+  if(!p1 || p1.length<4) return $('#fcpMsg').innerHTML = `<div class="msg msg-err">La clave debe tener al menos 4 caracteres.</div>`;
+  if(p1!==p2) return $('#fcpMsg').innerHTML = `<div class="msg msg-err">Las claves no coinciden.</div>`;
+  await APP.sb.rpc('set_company_user_password', {p_token: tok(), p_user_id: APP.session.id, p_new_password: p1});
+  APP.session.must_change_password = false;
+  localStorage.setItem('turnex_session', JSON.stringify(APP.session));
+  routeToDashboard();
+}
+
+/* ------------------------- SHELL ------------------------- */
+function shell(navHtml, bodyHtml, roleLabel){
+  return `
+  <div class="shell">
+    <div class="sidebar">
+      ${brandMark()}
+      <nav>${navHtml}</nav>
+      <div class="who"><b>${esc(APP.session.full_name||'')}</b>${roleLabel}<br><button class="link-btn" style="color:#fff;opacity:.75;margin-top:10px;" onclick="logout()">Cerrar sesión →</button></div>
+    </div>
+    <div class="main">${bodyHtml}</div>
+  </div>`;
+}
+
+/* =====================================================================
+   VISTA PROPIETARIO
+   ===================================================================== */
+async function renderOwner(){
+  document.title = 'Turnex · Propietario';
+  const tabs = [['empresas','Empresas'],['admins','Administradores'],['liquidaciones','Liquidaciones cerradas'],['backups','Copias de seguridad'],['cuenta','Mi cuenta']];
+  const nav = tabs.map(([k,l])=>`<button class="${APP.ownerTab===k?'active':''}" onclick="APP.ownerTab='${k}';renderOwner()">${l}</button>`).join('');
+  let body = '<div class="empty-state">Cargando…</div>';
+  $('#app').innerHTML = shell(nav, `<h1>Panel del propietario</h1><p class="lead">Control global de empresas, administradores y parámetros.</p>${body}`, 'Propietario');
+
+  if(APP.ownerTab==='empresas') body = await ownerEmpresasTab();
+  else if(APP.ownerTab==='admins') body = await ownerAdminsTab();
+  else if(APP.ownerTab==='liquidaciones') body = await ownerPayrollRunsTab();
+  else if(APP.ownerTab==='backups') body = await ownerBackupsTab();
+  else if(APP.ownerTab==='cuenta') body = ownerAccountTab();
+
+  $('.main').innerHTML = `<h1>Panel del propietario</h1><p class="lead">Control global de empresas, administradores y parámetros.</p>${body}`;
+}
+
+async function ownerEmpresasTab(){
+  const {data: companies} = await APP.sb.from('companies').select('*').order('created_at', {ascending:false});
+  APP.companiesCache = companies || [];
+  const {data: allEmployees} = await APP.sb.from('app_users').select('company_id').eq('role','employee');
+  const counts = {};
+  (allEmployees||[]).forEach(u=>{ counts[u.company_id] = (counts[u.company_id]||0)+1; });
+  const rows = (companies||[]).map(c=>{
+    const cid = saveCache(c);
+    const used = counts[c.id]||0;
+    return `<tr>
+      <td><b>${esc(c.name)}</b><div class="small">${esc(c.legal_id||'—')}</div></td>
+      <td>${esc(countryName(c.country))}</td>
+      <td>${esc(c.city||'—')}</td>
+      <td>${esc(c.default_currency)}</td>
+      <td class="num">${used} / ${c.max_employees||50}</td>
+      <td>${c.active? '<span class="pill pill-ok">Activa</span>' : '<span class="pill pill-off">Inactiva</span>'}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" onclick="openCompanyModal('${cid}')">Editar</button>
+        <button class="btn btn-sm ${c.active?'btn-danger':'btn-primary'}" onclick="toggleCompany('${c.id}', ${!c.active})">${c.active?'Desactivar':'Activar'}</button>
+        <button class="btn btn-danger btn-sm" onclick="promptDeleteCompany('${cid}')">Eliminar</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Empresas registradas (${(companies||[]).length})</h3>
+      <div class="actions"><button class="btn btn-primary" onclick="openCompanyModal()">+ Nueva empresa</button></div>
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>Empresa</th><th>País</th><th>Ciudad</th><th>Moneda</th><th>Empleados</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="empty-state">Aún no hay empresas. Crea la primera.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+function countryName(code){ const f = COUNTRIES.find(c=>c.code===code); return f? f.name : code; }
+
+function openCompanyModal(cacheId){
+  const c = cacheId ? APP.cache[cacheId] : null;
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg';
+  modal.id = 'companyModal';
+  modal.innerHTML = `
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('companyModal')">✕</button>
+    <h3>${c? 'Editar empresa' : 'Nueva empresa'}</h3>
+    <div id="companyModalMsg"></div>
+    <div class="row"><div class="field"><label>Nombre de la empresa</label><input id="cName" value="${esc(c?.name||'')}"></div></div>
+    <div class="row">
+      <div class="field"><label>NIT / EIN / CIF (ID fiscal)</label><input id="cLegalId" value="${esc(c?.legal_id||'')}"></div>
+      <div class="field"><label>País</label><select id="cCountry">${COUNTRIES.map(k=>`<option value="${k.code}" ${c?.country===k.code?'selected':''}>${k.name}</option>`).join('')}</select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Ciudad</label><input id="cCity" value="${esc(c?.city||'')}"></div>
+      <div class="field"><label>Moneda por defecto</label><input id="cCurrency" value="${esc(c?.default_currency||'USD')}" placeholder="USD, COP, EUR..."></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Teléfono</label><input id="cPhone" value="${esc(c?.phone||'')}"></div>
+      <div class="field"><label>Correo</label><input id="cEmail" value="${esc(c?.email||'')}"></div>
+    </div>
+    <div class="field"><label>Dirección</label><input id="cAddress" value="${esc(c?.address||'')}"></div>
+    <div class="field"><label>Límite de empleados permitidos</label>
+      <select id="cMaxEmployees">
+        ${[20,50,100,200,1000].map(n=>`<option value="${n}" ${(c?.max_employees||50)===n?'selected':''}>De 1 a ${n} empleados</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="submitCompany('${c?.id||''}')">${c? 'Guardar cambios':'Crear empresa'}</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function closeModal(id){ const m = document.getElementById(id); if(m) m.remove(); }
+async function submitCompany(existingId){
+  const payload = {
+    name: $('#cName').value.trim(),
+    legal_id: $('#cLegalId').value.trim(),
+    country: $('#cCountry').value,
+    city: $('#cCity').value.trim(),
+    default_currency: ($('#cCurrency').value.trim()||'USD').toUpperCase(),
+    phone: $('#cPhone').value.trim(),
+    email: $('#cEmail').value.trim(),
+    address: $('#cAddress').value.trim(),
+    max_employees: parseInt($('#cMaxEmployees').value, 10) || 50,
+  };
+  if(!payload.name) return $('#companyModalMsg').innerHTML = `<div class="msg msg-err">El nombre es obligatorio.</div>`;
+  let error;
+  if(existingId){ ({error} = await APP.sb.from('companies').update(payload).eq('id', existingId)); }
+  else{ ({error} = await APP.sb.from('companies').insert(payload)); }
+  if(error) return $('#companyModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  closeModal('companyModal');
+  renderOwner();
+}
+async function toggleCompany(id, newVal){
+  await APP.sb.from('companies').update({active:newVal}).eq('id', id);
+  renderOwner();
+}
+function promptDeleteCompany(cacheId){
+  const c = APP.cache[cacheId];
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='deleteCompanyModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('deleteCompanyModal')">✕</button>
+  <h3>Eliminar empresa</h3>
+  <div class="msg msg-err">Esto elimina PERMANENTEMENTE a <b>${esc(c.name)}</b>: sus administradores, empleados, ubicaciones, turnos, marcaciones, tareas y liquidaciones. No se puede deshacer.</div>
+  <p class="small">Escribe el nombre exacto de la empresa (<b>${esc(c.name)}</b>) para confirmar:</p>
+  <div class="field"><input id="deleteCompanyConfirm"></div>
+  <button class="btn btn-danger btn-block" onclick="doDeleteCompany('${c.id}','${esc(c.name).replace(/'/g,"\\'")}')">Eliminar definitivamente</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function doDeleteCompany(id, name){
+  if($('#deleteCompanyConfirm').value.trim() !== name) return alert('El nombre no coincide exactamente. Inténtalo de nuevo.');
+  const {error} = await APP.sb.rpc('delete_company', {p_token: tok(), p_company_id: id});
+  if(error) return alert(error.message);
+  closeModal('deleteCompanyModal');
+  renderOwner();
+}
+
+async function ownerAdminsTab(){
+  const {data: companies} = await APP.sb.from('companies').select('id,name').order('name');
+  APP.companiesCache = companies || [];
+  if(!APP.ownerCompanyFocus && companies && companies.length) APP.ownerCompanyFocus = companies[0].id;
+  let adminRows = '';
+  if(APP.ownerCompanyFocus){
+    const {data: admins} = await APP.sb.from('app_users').select('id,company_id,role,username,full_name,email,phone,active,must_change_password,created_at').eq('company_id', APP.ownerCompanyFocus).eq('role','admin').order('created_at');
+    adminRows = (admins||[]).map(a=>{
+      const cid = saveCache(a);
+      return `<tr><td><b>${esc(a.full_name)}</b><div class="small">${esc(a.username)}</div></td><td>${esc(a.email||'—')}</td><td>${a.active?'<span class="pill pill-ok">Activo</span>':'<span class="pill pill-off">Inactivo</span>'}</td>
+      <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="promptResetAdminPass('${cid}')">Restablecer clave</button>
+      <button class="btn btn-sm ${a.active?'btn-danger':'btn-primary'}" onclick="toggleAdmin('${a.id}',${!a.active})">${a.active?'Desactivar':'Activar'}</button></td></tr>`;
+    }).join('');
+  }
+  return `
+  <div class="card">
+    <div class="toolbar">
+      <div class="field" style="margin:0;min-width:260px;"><label>Empresa</label>
+        <select onchange="APP.ownerCompanyFocus=this.value;renderOwner()">
+          ${(companies||[]).map(c=>`<option value="${c.id}" ${APP.ownerCompanyFocus===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="actions"><button class="btn btn-primary" onclick="openAdminModal()" ${!APP.ownerCompanyFocus?'disabled':''}>+ Nuevo administrador</button></div>
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>Administrador</th><th>Correo</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${adminRows || '<tr><td colspan="4" class="empty-state">No hay administradores para esta empresa todavía.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+function openAdminModal(){
+  const modal = document.createElement('div');
+  modal.className='modal-bg'; modal.id='adminModal';
+  modal.innerHTML = `
+  <div class="modal"><button class="modal-close" onclick="closeModal('adminModal')">✕</button>
+    <h3>Nuevo administrador de empresa</h3>
+    <div id="adminModalMsg"></div>
+    <div class="field"><label>Nombre completo</label><input id="aFullName"></div>
+    <div class="row"><div class="field"><label>Usuario (ID de acceso)</label><input id="aUsername"></div>
+    <div class="field"><label>Clave temporal</label><input id="aPassword" type="text" value="${genTempPass()}"></div></div>
+    <div class="row"><div class="field"><label>Correo</label><input id="aEmail"></div>
+    <div class="field"><label>Teléfono</label><input id="aPhone"></div></div>
+    <p class="small">El administrador deberá cambiar esta clave temporal en su primer ingreso.</p>
+    <button class="btn btn-primary btn-block" onclick="submitAdmin()">Crear administrador</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function genTempPass(){ return 'T'+Math.random().toString(36).slice(2,8).toUpperCase(); }
+async function submitAdmin(){
+  const full_name = $('#aFullName').value.trim();
+  const username = $('#aUsername').value.trim();
+  const password = $('#aPassword').value;
+  if(!full_name||!username||!password) return $('#adminModalMsg').innerHTML = `<div class="msg msg-err">Completa nombre, usuario y clave.</div>`;
+  const {error} = await APP.sb.rpc('create_company_user', {
+    p_token: tok(), p_company_id: APP.ownerCompanyFocus, p_role:'admin', p_username: username, p_password: password,
+    p_full_name: full_name, p_email: $('#aEmail').value.trim(), p_phone: $('#aPhone').value.trim()
+  });
+  if(error) return $('#adminModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  closeModal('adminModal');
+  renderOwner();
+}
+async function toggleAdmin(id, val){ await APP.sb.from('app_users').update({active:val}).eq('id', id); renderOwner(); }
+function promptResetAdminPass(cacheId){
+  const a = APP.cache[cacheId];
+  const np = prompt(`Nueva clave temporal para ${a.full_name}:`, genTempPass());
+  if(!np) return;
+  APP.sb.rpc('admin_reset_user_password', {p_token: tok(), p_user_id: a.id, p_new_password: np}).then(({error})=>{
+    if(error) return alert(error.message);
+    alert('Clave actualizada. El usuario deberá cambiarla al ingresar.');
+  });
+}
+
+async function ownerPayrollRunsTab(){
+  const {data: companies} = await APP.sb.from('companies').select('id,name').order('name');
+  if(!APP.ownerCompanyFocus && companies && companies.length) APP.ownerCompanyFocus = companies[0].id;
+  let rows = '';
+  if(APP.ownerCompanyFocus){
+    const {data: runs} = await APP.sb.from('payroll_runs').select('*, app_users:closed_by(full_name)').eq('company_id', APP.ownerCompanyFocus).order('closed_at', {ascending:false});
+    rows = (runs||[]).map(r=>`<tr><td class="num">${r.period_start} → ${r.period_end}</td>
+      <td class="num">${fmtMoney(r.total_amount||0, r.currency||'')}</td>
+      <td>${esc(r.app_users?.full_name||'—')}</td>
+      <td class="num">${new Date(r.closed_at).toLocaleString('es-CO')}</td>
+      <td style="text-align:right;"><button class="btn btn-danger btn-sm" onclick="reopenRun('${r.id}')">Reabrir</button></td></tr>`).join('');
+  }
+  return `
+  <div class="card">
+    <div class="toolbar">
+      <div class="field" style="margin:0;min-width:260px;"><label>Empresa</label>
+        <select onchange="APP.ownerCompanyFocus=this.value;renderOwner()">
+          ${(companies||[]).map(c=>`<option value="${c.id}" ${APP.ownerCompanyFocus===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <p class="small">Una liquidación cerrada no puede volver a procesarse por el administrador. Reabrirla aquí permite que la vuelvan a cerrar para el mismo periodo.</p>
+    <div class="table-scroll"><table><thead><tr><th>Periodo</th><th>Total</th><th>Cerrada por</th><th>Fecha de cierre</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-state">Esta empresa aún no ha cerrado ninguna liquidación.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+async function reopenRun(id){
+  if(!confirm('¿Reabrir esta liquidación? El administrador podrá volver a procesarla.')) return;
+  const {error} = await APP.sb.rpc('reopen_payroll_run', {p_token: tok(), p_run_id: id});
+  if(error) return alert(error.message);
+  renderOwner();
+}
+
+async function ownerBackupsTab(){
+  const {data: backups, error} = await APP.sb.rpc('list_backups', {p_token: tok()});
+  const rows = (backups||[]).map(b=>`<tr><td class="num">${new Date(b.created_at).toLocaleString('es-CO')}</td><td>${esc(b.note||'—')}</td>
+    <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="downloadBackup('${b.id}')">Descargar</button>
+    <button class="btn btn-danger btn-sm" onclick="promptRestoreBackup('${b.id}')">Restaurar</button></td></tr>`).join('');
+  return `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Copias de seguridad</h3>
+      <div class="actions"><button class="btn btn-primary" onclick="createBackupNow()">Generar copia ahora</button></div>
+    </div>
+    <p class="small">Se genera una copia automática todos los días a las 3:00 a.m. (hora UTC), y se conservan las últimas 30. Las fotos de tareas no se incluyen en la copia para mantenerla liviana.</p>
+    ${error? `<div class="msg msg-err">${esc(error.message)}</div>`:''}
+    <div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Nota</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="3" class="empty-state">Aún no hay copias de seguridad generadas.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+async function createBackupNow(){
+  const {error} = await APP.sb.rpc('create_backup', {p_note:'Copia manual'});
+  if(error) return alert(error.message);
+  renderOwner();
+}
+async function downloadBackup(id){
+  const {data, error} = await APP.sb.rpc('get_backup_data', {p_token: tok(), p_backup_id: id});
+  if(error) return alert(error.message);
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `turnex_backup_${id.slice(0,8)}.json`;
+  a.click();
+}
+function promptRestoreBackup(id){
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='restoreModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('restoreModal')">✕</button>
+  <h3>Restaurar copia de seguridad</h3>
+  <div class="msg msg-err">Esto reemplaza TODOS los datos actuales (empresas, usuarios, turnos, tareas) por los de esta copia. Es irreversible. Todos los usuarios deberán restablecer su clave después.</div>
+  <p class="small">Escribe <b>RESTAURAR</b> para confirmar:</p>
+  <div class="field"><input id="restoreConfirmText"></div>
+  <button class="btn btn-danger btn-block" onclick="doRestoreBackup('${id}')">Restaurar ahora</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function doRestoreBackup(id){
+  if($('#restoreConfirmText').value.trim().toUpperCase() !== 'RESTAURAR') return alert('Escribe RESTAURAR exactamente para confirmar.');
+  const {error} = await APP.sb.rpc('restore_backup', {p_token: tok(), p_backup_id: id});
+  if(error) return alert(error.message);
+  alert('Copia restaurada. Todos deberán volver a iniciar sesión.');
+  closeModal('restoreModal');
+  logout();
+}
+
+function ownerAccountTab(){
+  return `
+  <div class="card" style="max-width:420px;">
+    <h3>Cambiar mi clave de propietario</h3>
+    <div id="ownerPassMsg"></div>
+    <div class="field"><label>Nueva clave</label><input id="ownerNewPass" type="password"></div>
+    <div class="field"><label>Confirmar</label><input id="ownerNewPass2" type="password"></div>
+    <button class="btn btn-primary" onclick="submitOwnerPass()">Actualizar clave</button>
+  </div>`;
+}
+async function submitOwnerPass(){
+  const p1=$('#ownerNewPass').value, p2=$('#ownerNewPass2').value;
+  if(!p1||p1.length<4) return $('#ownerPassMsg').innerHTML=`<div class="msg msg-err">Mínimo 4 caracteres.</div>`;
+  if(p1!==p2) return $('#ownerPassMsg').innerHTML=`<div class="msg msg-err">Las claves no coinciden.</div>`;
+  await APP.sb.rpc('set_owner_password', {p_token: tok(), p_new_password:p1});
+  $('#ownerPassMsg').innerHTML = `<div class="msg msg-ok">Clave actualizada correctamente.</div>`;
+}
+
+/* =====================================================================
+   VISTA ADMINISTRADOR DE EMPRESA
+   ===================================================================== */
+async function renderAdmin(){
+  document.title = 'Turnex · Administrador';
+  if(APP._panelInterval){ clearInterval(APP._panelInterval); APP._panelInterval = null; }
+  const tabs = [['panel','Panel'],['empleados','Empleados'],['ubicaciones','Ubicaciones'],['calendario','Calendario'],['tareas','Tareas'],['nomina','Nómina'],['reportes','Reportes'],['cuenta','Mi cuenta']];
+  const nav = tabs.map(([k,l])=>`<button class="${APP.adminTab===k?'active':''}" onclick="APP.adminTab='${k}';renderAdmin()">${l}</button>`).join('');
+  $('#app').innerHTML = shell(nav, `<div class="empty-state">Cargando…</div>`, 'Administrador');
+  let body = '';
+  if(APP.adminTab==='panel') body = await adminPanelTab();
+  else if(APP.adminTab==='empleados') body = await adminEmpleadosTab();
+  else if(APP.adminTab==='ubicaciones') body = await adminUbicacionesTab();
+  else if(APP.adminTab==='calendario') body = await adminCalendarioTab();
+  else if(APP.adminTab==='tareas') body = await adminTareasTab();
+  else if(APP.adminTab==='nomina') body = await adminNominaTab();
+  else if(APP.adminTab==='reportes') body = adminReportesTab();
+  else if(APP.adminTab==='cuenta') body = adminAccountTab();
+  $('.main').innerHTML = `<h1>Panel de administrador</h1><p class="lead">Gestiona empleados, turnos, tareas y nómina de tu empresa.</p>${body}`;
+  if(APP.adminTab==='panel'){
+    APP._panelInterval = setInterval(async ()=>{
+      if(APP.adminTab!=='panel') { clearInterval(APP._panelInterval); return; }
+      const box = $('#panelLive');
+      if(box) box.innerHTML = await panelLiveContent();
+    }, 20000);
+  }
+}
+async function adminPanelTab(){
+  return `<div id="panelLive">${await panelLiveContent()}</div>`;
+}
+async function panelLiveContent(){
+  await refreshAbsences();
+  const today = todayISO();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name)), locations:location_id(name), time_entries(*)')
+    .eq('company_id', APP.session.company_id).eq('shift_date', today).order('start_time');
+  const {data: overtimeReqs} = await APP.sb.from('overtime_requests').select('*, employees:employee_id(*, app_users:user_id(full_name)), shifts:shift_id(shift_date,start_time,end_time)')
+    .eq('company_id', APP.session.company_id).eq('status','pending').order('requested_at');
+
+  const activos = (shifts||[]).filter(s=>s.status==='in_progress').length;
+  const programados = (shifts||[]).filter(s=>s.status==='scheduled').length;
+  const completados = (shifts||[]).filter(s=>s.status==='completed').length;
+  const ausentes = (shifts||[]).filter(s=>s.status==='absent').length;
+
+  const rows = (shifts||[]).map(s=>{
+    const entry = (s.time_entries||[])[0];
+    return `<tr>
+      <td><b>${esc(s.employees?.app_users?.full_name||'—')}</b><div class="small">${esc(s.locations?.name||'—')}</div></td>
+      <td class="num">${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}</td>
+      <td class="num">${entry?.clock_in? new Date(entry.clock_in).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+      <td class="num">${entry?.clock_out? new Date(entry.clock_out).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+      <td>${statusPill(s.status)}</td>
+    </tr>`;
+  }).join('');
+
+  const overtimeRows = (overtimeReqs||[]).map(r=>{
+    const cid = saveCache(r);
+    return `<tr><td><b>${esc(r.employees?.app_users?.full_name||'—')}</b></td>
+    <td class="num">${r.shifts?.start_time?.slice(0,5)}–${r.shifts?.end_time?.slice(0,5)}</td>
+    <td class="num">${new Date(r.requested_clock_out).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</td>
+    <td style="text-align:right;"><button class="btn btn-primary btn-sm" onclick="decideOvertime('${cid}',true)">Autorizar</button>
+    <button class="btn btn-danger btn-sm" onclick="decideOvertime('${cid}',false)">Rechazar</button></td></tr>`;
+  }).join('');
+
+  return `
+  <div class="kpi-row">
+    <div class="kpi"><div class="v num">${activos}</div><div class="l">En turno ahora mismo</div></div>
+    <div class="kpi"><div class="v num">${programados}</div><div class="l">Programados, aún no llegan</div></div>
+    <div class="kpi"><div class="v num">${completados}</div><div class="l">Completados hoy</div></div>
+    <div class="kpi"><div class="v num">${ausentes}</div><div class="l">Ausentes hoy</div></div>
+  </div>
+  ${(overtimeReqs||[]).length>0 ? `
+  <div class="card">
+    <h3>⏱ Solicitudes de tiempo complementario / hora extra</h3>
+    <p class="small">Estos empleados marcaron su salida después de la hora programada y necesitan tu autorización.</p>
+    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Turno programado</th><th>Salida solicitada</th><th></th></tr></thead>
+    <tbody>${overtimeRows}</tbody></table></div>
+  </div>` : ''}
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Turnos de hoy (${today})</h3><span class="small">Se actualiza automáticamente cada 20 segundos</span></div>
+    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Horario</th><th>Entrada real</th><th>Salida real</th><th>Estado</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-state">No hay turnos programados para hoy.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+async function decideOvertime(cacheId, approve){
+  const r = APP.cache[cacheId];
+  const {error} = await APP.sb.rpc('decide_overtime', {p_token: tok(), p_request_id: r.id, p_approve: approve});
+  if(error) return alert(error.message);
+  $('#panelLive').innerHTML = await panelLiveContent();
+}
+
+async function getEmployeesFull(){
+  const {data} = await APP.sb.from('employees').select('*, app_users:user_id(id,company_id,role,username,full_name,email,phone,active,must_change_password), locations:default_location_id(name)').eq('company_id', APP.session.company_id).order('created_at');
+  return data || [];
+}
+async function getLocations(){
+  const {data} = await APP.sb.from('locations').select('*').eq('company_id', APP.session.company_id).order('name');
+  return data || [];
+}
+
+async function adminEmpleadosTab(){
+  const emps = await getEmployeesFull();
+  const {data: companyRow} = await APP.sb.from('companies').select('max_employees').eq('id', APP.session.company_id).single();
+  const limit = companyRow?.max_employees || 50;
+  const atLimit = emps.length >= limit;
+  const rows = emps.map(e=>{
+    const cid = saveCache(e);
+    const u = e.app_users;
+    return `<tr>
+      <td><b>${esc(u?.full_name)}</b><div class="small">${esc(u?.username)}</div></td>
+      <td>${esc(e.position||'—')}</td>
+      <td>${esc(e.locations?.name||'—')}</td>
+      <td class="num">${e.hourly_rate} ${esc(e.currency)}</td>
+      <td class="num">${e.contracted_hours_week} h/sem</td>
+      <td>${u?.active? '<span class="pill pill-ok">Activo</span>':'<span class="pill pill-off">Inactivo</span>'}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" onclick="openEmployeeModal('${cid}')">Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="promptResetEmpPass('${cid}')">Clave</button>
+        <button class="btn btn-sm ${u?.active?'btn-danger':'btn-primary'}" onclick="toggleEmployee('${cid}', ${!u?.active})">${u?.active?'Desactivar':'Activar'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Empleados (${emps.length} / ${limit})</h3>
+      <div class="actions"><button class="btn btn-primary" ${atLimit?'disabled':''} onclick="openEmployeeModal()">+ Nuevo empleado</button></div>
+    </div>
+    ${atLimit? `<div class="locked-note">Alcanzaste el límite de ${limit} empleados permitido para tu empresa. Contacta al propietario de la plataforma para aumentarlo.</div>`:''}
+    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Cargo</th><th>Ubicación</th><th>Tarifa/hora</th><th>Horas pactadas</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="empty-state">Aún no hay empleados. Crea el primero.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+async function openEmployeeModal(cacheId){
+  const e = cacheId ? APP.cache[cacheId] : null;
+  const locs = await getLocations();
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='empModal';
+  modal.innerHTML = `
+  <div class="modal"><button class="modal-close" onclick="closeModal('empModal')">✕</button>
+    <h3>${e?'Editar empleado':'Nuevo empleado'}</h3>
+    <div id="empModalMsg"></div>
+    <div class="row"><div class="field"><label>Nombre completo</label><input id="eFullName" value="${esc(e?.app_users?.full_name||'')}"></div></div>
+    ${e? '' : `<div class="row"><div class="field"><label>Usuario (ID de acceso)</label><input id="eUsername"></div>
+    <div class="field"><label>Clave temporal</label><input id="ePassword" value="${genTempPass()}"></div></div>`}
+    <div class="row"><div class="field"><label>Correo</label><input id="eEmail" value="${esc(e?.app_users?.email||'')}"></div>
+    <div class="field"><label>Teléfono</label><input id="ePhone" value="${esc(e?.app_users?.phone||'')}"></div></div>
+    <div class="row"><div class="field"><label>Cargo</label><input id="ePosition" value="${esc(e?.position||'')}"></div>
+    <div class="field"><label>Ubicación por defecto</label><select id="eLocation"><option value="">— Ninguna —</option>${locs.map(l=>`<option value="${l.id}" ${e?.default_location_id===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select></div></div>
+    <div class="row"><div class="field"><label>Tarifa por hora</label><input id="eRate" value="${e?.hourly_rate??''}" placeholder="25000"></div>
+    <div class="field"><label>Moneda</label><input id="eCurrency" value="${esc(e?.currency||'USD')}"></div></div>
+    <div class="row"><div class="field"><label>Horas semanales pactadas</label><input id="eContracted" value="${e?.contracted_hours_week??'40'}"></div>
+    <div class="field"><label>Fecha de ingreso</label><input type="date" id="eHireDate" value="${e?.hire_date||''}"></div></div>
+    <button class="btn btn-primary btn-block" onclick="submitEmployee('${cacheId||''}')">${e?'Guardar cambios':'Crear empleado'}</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function submitEmployee(cacheId){
+  const e = cacheId ? APP.cache[cacheId] : null;
+  const empFields = {
+    position: $('#ePosition').value.trim(),
+    default_location_id: $('#eLocation').value || null,
+    hourly_rate: parseFloat($('#eRate').value)||0,
+    currency: ($('#eCurrency').value.trim()||'USD').toUpperCase(),
+    contracted_hours_week: parseFloat($('#eContracted').value)||40,
+    hire_date: $('#eHireDate').value || null,
+  };
+  if(e){
+    await APP.sb.from('app_users').update({full_name: $('#eFullName').value.trim(), email:$('#eEmail').value.trim(), phone:$('#ePhone').value.trim()}).eq('id', e.user_id);
+    const {error} = await APP.sb.from('employees').update(empFields).eq('id', e.id);
+    if(error) return $('#empModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  } else {
+    const full_name = $('#eFullName').value.trim();
+    const username = $('#eUsername').value.trim();
+    const password = $('#ePassword').value;
+    if(!full_name||!username||!password) return $('#empModalMsg').innerHTML = `<div class="msg msg-err">Completa nombre, usuario y clave.</div>`;
+    const {data: newUserId, error: uerr} = await APP.sb.rpc('create_company_user', {
+      p_token: tok(), p_company_id: APP.session.company_id, p_role:'employee', p_username: username, p_password: password,
+      p_full_name: full_name, p_email: $('#eEmail').value.trim(), p_phone: $('#ePhone').value.trim()
+    });
+    if(uerr) return $('#empModalMsg').innerHTML = `<div class="msg msg-err">${esc(uerr.message)}</div>`;
+    const {error: eerr} = await APP.sb.from('employees').insert({...empFields, user_id:newUserId, company_id: APP.session.company_id});
+    if(eerr) return $('#empModalMsg').innerHTML = `<div class="msg msg-err">${esc(eerr.message)}</div>`;
+  }
+  closeModal('empModal');
+  renderAdmin();
+}
+async function toggleEmployee(cacheId, val){
+  const e = APP.cache[cacheId];
+  await APP.sb.from('app_users').update({active:val}).eq('id', e.user_id);
+  renderAdmin();
+}
+function promptResetEmpPass(cacheId){
+  const e = APP.cache[cacheId];
+  const np = prompt(`Nueva clave temporal para ${e.app_users.full_name}:`, genTempPass());
+  if(!np) return;
+  APP.sb.rpc('admin_reset_user_password', {p_token: tok(), p_user_id: e.user_id, p_new_password: np}).then(({error})=>{
+    if(error) return alert(error.message);
+    alert('Clave actualizada. El empleado deberá cambiarla al ingresar.');
+  });
+}
+
+async function adminUbicacionesTab(){
+  const locs = await getLocations();
+  const rows = locs.map(l=>{
+    const cid = saveCache(l);
+    return `<tr><td><b>${esc(l.name)}</b></td><td>${esc(l.city||'—')}</td><td>${esc(l.address||'—')}</td>
+      <td>${l.active?'<span class="pill pill-ok">Activa</span>':'<span class="pill pill-off">Inactiva</span>'}</td>
+      <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="openLocationModal('${cid}')">Editar</button>
+      <button class="btn btn-sm ${l.active?'btn-danger':'btn-primary'}" onclick="toggleLocation('${l.id}',${!l.active})">${l.active?'Desactivar':'Activar'}</button></td></tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Ubicaciones (${locs.length})</h3><div class="actions"><button class="btn btn-primary" onclick="openLocationModal()">+ Nueva ubicación</button></div></div>
+    <div class="table-scroll"><table><thead><tr><th>Nombre</th><th>Ciudad</th><th>Dirección</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-state">Aún no hay ubicaciones registradas.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+function openLocationModal(cacheId){
+  const l = cacheId ? APP.cache[cacheId] : null;
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='locModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('locModal')">✕</button>
+  <h3>${l?'Editar ubicación':'Nueva ubicación'}</h3>
+  <div id="locModalMsg"></div>
+  <div class="field"><label>Nombre</label><input id="lName" value="${esc(l?.name||'')}"></div>
+  <div class="row"><div class="field"><label>Ciudad</label><input id="lCity" value="${esc(l?.city||'')}"></div>
+  <div class="field"><label>País</label><input id="lCountry" value="${esc(l?.country||'')}"></div></div>
+  <div class="field"><label>Dirección</label><input id="lAddress" value="${esc(l?.address||'')}"></div>
+  <button class="btn btn-primary btn-block" onclick="submitLocation('${l?.id||''}')">${l?'Guardar':'Crear'}</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function submitLocation(existingId){
+  const payload = {name:$('#lName').value.trim(), city:$('#lCity').value.trim(), country:$('#lCountry').value.trim(), address:$('#lAddress').value.trim(), company_id: APP.session.company_id};
+  if(!payload.name) return $('#locModalMsg').innerHTML = `<div class="msg msg-err">El nombre es obligatorio.</div>`;
+  let error;
+  if(existingId){ delete payload.company_id; ({error} = await APP.sb.from('locations').update(payload).eq('id', existingId)); }
+  else{ ({error} = await APP.sb.from('locations').insert(payload)); }
+  if(error) return $('#locModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  closeModal('locModal'); renderAdmin();
+}
+async function toggleLocation(id,val){ await APP.sb.from('locations').update({active:val}).eq('id', id); renderAdmin(); }
+
+/* ---- calendario admin ---- */
+async function adminCalendarioTab(){
+  await refreshAbsences();
+  const emps = await getEmployeesFull();
+  const locs = await getLocations();
+  APP.cache['_emps'] = emps; APP.cache['_locs'] = locs;
+  const y = APP.calRef.getFullYear(), m = APP.calRef.getMonth();
+  const first = new Date(y,m,1), last = new Date(y,m+1,0);
+  const startDow = first.getDay();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name))')
+    .eq('company_id', APP.session.company_id)
+    .gte('shift_date', first.toISOString().slice(0,10))
+    .lte('shift_date', last.toISOString().slice(0,10));
+  const byDay = {};
+  (shifts||[]).forEach(s=>{ (byDay[s.shift_date] = byDay[s.shift_date]||[]).push(s); });
+  APP.cache['_shiftsByDay'] = byDay;
+
+  let cells = '';
+  for(let i=0;i<startDow;i++) cells += `<div class="cal-cell empty"></div>`;
+  for(let d=1; d<=last.getDate(); d++){
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayShifts = byDay[dateStr]||[];
+    const isToday = dateStr===todayISO();
+    const tags = dayShifts.slice(0,2).map(s=>{
+      const cls = s.status==='absent'?'absent':(s.status==='completed'?'done':'');
+      return `<span class="shift-tag ${cls}">${esc(s.employees?.app_users?.full_name||'—').split(' ')[0]} ${s.start_time?.slice(0,5)}</span>`;
+    }).join('');
+    const more = dayShifts.length>2 ? `<div class="more">+${dayShifts.length-2} más</div>` : '';
+    cells += `<div class="cal-cell ${isToday?'today':''}" onclick="openDayPanel('${dateStr}')"><div class="d">${d}</div>${tags}${more}</div>`;
+  }
+  return `
+  <div class="card">
+    <div class="cal-head">
+      <button class="btn btn-ghost btn-sm" onclick="shiftMonth(-1)">‹ Anterior</button>
+      <h3>${MONTHS[m]} ${y}</h3>
+      <button class="btn btn-ghost btn-sm" onclick="shiftMonth(1)">Siguiente ›</button>
+    </div>
+    <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
+    <p class="small" style="margin-top:12px;">Haz clic en un día para programar o revisar turnos.</p>
+  </div>
+  <div id="dayPanelHolder"></div>`;
+}
+function shiftMonth(delta){ APP.calRef.setMonth(APP.calRef.getMonth()+delta); renderAdmin(); }
+
+function openDayPanel(dateStr){
+  const emps = APP.cache['_emps'], locs = APP.cache['_locs'];
+  const dayShifts = (APP.cache['_shiftsByDay'][dateStr])||[];
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='dayModal';
+  const rows = dayShifts.map(s=>{
+    const cid = saveCache(s);
+    return `<tr><td>${esc(s.employees?.app_users?.full_name||'—')}</td><td class="num">${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}</td>
+      <td>${statusPill(s.status)}</td>
+      <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="cycleShiftStatus('${cid}','${dateStr}')">Cambiar estado</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteShift('${s.id}','${dateStr}')">Eliminar</button></td></tr>`;
+  }).join('');
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('dayModal')">✕</button>
+  <h3>Turnos — ${dateStr}</h3>
+  <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Horario</th><th>Estado</th><th></th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="4" class="empty-state">Sin turnos este día.</td></tr>'}</tbody></table></div>
+  <hr class="sep">
+  <h3 style="font-size:14px;">Programar nuevo turno</h3>
+  <div id="shiftModalMsg"></div>
+  <div class="field"><label>Empleado</label><select id="sEmployee">${emps.map(e=>`<option value="${e.id}">${esc(e.app_users?.full_name)}</option>`).join('')}</select></div>
+  <div class="field"><label>Ubicación</label><select id="sLocation"><option value="">— Ninguna —</option>${locs.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></div>
+  <div class="row"><div class="field"><label>Hora inicio</label><input type="time" id="sStart" value="08:00"></div>
+  <div class="field"><label>Hora fin</label><input type="time" id="sEnd" value="17:00"></div></div>
+  <div class="field"><label>Notas</label><input id="sNotes"></div>
+  <button class="btn btn-primary btn-block" onclick="submitShift('${dateStr}')">+ Agregar turno</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function statusPill(s){
+  const map = {scheduled:['pill-sched','Programado'], in_progress:['pill-progress','En curso'], completed:['pill-done','Completado'], absent:['pill-absent','Ausente'], cancelled:['pill-cancel','Cancelado']};
+  const [c,l] = map[s]||['pill-sched',s];
+  return `<span class="pill ${c}">${l}</span>`;
+}
+async function refreshAbsences(){
+  const todayStr = todayISO();
+  const nowTime = new Date().toTimeString().slice(0,8);
+  await APP.sb.from('shifts').update({status:'absent'})
+    .eq('company_id', APP.session.company_id).eq('status','scheduled').lt('shift_date', todayStr);
+  await APP.sb.from('shifts').update({status:'absent'})
+    .eq('company_id', APP.session.company_id).eq('status','scheduled').eq('shift_date', todayStr).lt('end_time', nowTime);
+}
+async function submitShift(dateStr){
+  const payload = {
+    company_id: APP.session.company_id,
+    employee_id: $('#sEmployee').value,
+    location_id: $('#sLocation').value || null,
+    shift_date: dateStr,
+    start_time: $('#sStart').value,
+    end_time: $('#sEnd').value,
+    notes: $('#sNotes').value.trim(),
+    created_by: APP.session.id,
+  };
+  if(!payload.employee_id) return $('#shiftModalMsg').innerHTML = `<div class="msg msg-err">Selecciona un empleado.</div>`;
+  const {error} = await APP.sb.from('shifts').insert(payload);
+  if(error) return $('#shiftModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  closeModal('dayModal'); renderAdmin();
+}
+async function cycleShiftStatus(cacheId, dateStr){
+  const s = APP.cache[cacheId];
+  const order = ['scheduled','in_progress','completed','absent','cancelled'];
+  const next = order[(order.indexOf(s.status)+1)%order.length];
+  await APP.sb.from('shifts').update({status:next}).eq('id', s.id);
+  closeModal('dayModal'); renderAdmin().then(()=>openDayPanel(dateStr));
+}
+async function deleteShift(id, dateStr){
+  if(!confirm('¿Eliminar este turno?')) return;
+  await APP.sb.from('shifts').delete().eq('id', id);
+  closeModal('dayModal'); renderAdmin().then(()=>openDayPanel(dateStr));
+}
+
+/* ---- tareas ---- */
+async function adminTareasTab(){
+  const emps = await getEmployeesFull();
+  APP.cache['_emps2'] = emps;
+  const {data: tasks} = await APP.sb.from('tasks').select('*, employees:employee_id(*, app_users:user_id(full_name)), task_photos(*)').eq('company_id', APP.session.company_id).order('due_date');
+  const rows = (tasks||[]).map(t=>{
+    const cid = saveCache(t);
+    const photoCount = (t.task_photos||[]).length;
+    return `<tr><td><b>${esc(t.title)}</b>${t.requires_photo?'<span class="badge-photo">📷 requiere foto</span>':''}<div class="small">${esc(t.description||'')}</div></td>
+    <td>${esc(t.employees?.app_users?.full_name || 'Sin asignar')}</td>
+    <td class="num">${t.due_date||'—'}</td>
+    <td>${taskPill(t.status)}</td>
+    <td>${photoCount>0? `<button class="link-btn" onclick="viewTaskPhotos('${cid}')">${photoCount} foto(s)</button>` : '<span class="small">—</span>'}</td>
+    <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="cycleTaskStatus('${cid}')">Cambiar estado</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Eliminar</button></td></tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="toolbar"><h3 style="margin:0;">Tareas (${(tasks||[]).length})</h3><div class="actions"><button class="btn btn-primary" onclick="openTaskModal()">+ Nueva tarea</button></div></div>
+    <div class="table-scroll"><table><thead><tr><th>Tarea</th><th>Asignada a</th><th>Vence</th><th>Estado</th><th>Evidencia</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="empty-state">No hay tareas registradas.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+function viewTaskPhotos(cacheId){
+  const t = APP.cache[cacheId];
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='photoModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('photoModal')">✕</button>
+  <h3>Evidencia — ${esc(t.title)}</h3>
+  <div>${(t.task_photos||[]).map(p=>`<a href="${p.photo_base64}" target="_blank"><img class="photo-thumb" src="${p.photo_base64}"></a>`).join('') || '<p class="small">Sin fotos aún.</p>'}</div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function taskPill(s){
+  const map = {pending:['pill-pending','Pendiente'], in_progress:['pill-progress','En progreso'], done:['pill-done','Hecha']};
+  const [c,l] = map[s]||['pill-pending',s];
+  return `<span class="pill ${c}">${l}</span>`;
+}
+function openTaskModal(){
+  const emps = APP.cache['_emps2']||[];
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='taskModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('taskModal')">✕</button>
+  <h3>Nueva tarea</h3><div id="taskModalMsg"></div>
+  <div class="field"><label>Título</label><input id="tTitle"></div>
+  <div class="field"><label>Descripción</label><textarea id="tDesc" rows="2"></textarea></div>
+  <div class="row"><div class="field"><label>Asignar a</label><select id="tEmployee"><option value="">Sin asignar / general</option>${emps.map(e=>`<option value="${e.id}">${esc(e.app_users?.full_name)}</option>`).join('')}</select></div>
+  <div class="field"><label>Fecha límite</label><input type="date" id="tDue"></div></div>
+  <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="tRequiresPhoto" style="width:auto;"> Función especial: requiere foto de evidencia</label></div>
+  <button class="btn btn-primary btn-block" onclick="submitTask()">Crear tarea</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function submitTask(){
+  const title = $('#tTitle').value.trim();
+  if(!title) return $('#taskModalMsg').innerHTML = `<div class="msg msg-err">El título es obligatorio.</div>`;
+  const payload = {company_id: APP.session.company_id, title, description: $('#tDesc').value.trim(), employee_id: $('#tEmployee').value || null, due_date: $('#tDue').value || null, assigned_by: APP.session.id, requires_photo: $('#tRequiresPhoto').checked};
+  const {error} = await APP.sb.from('tasks').insert(payload);
+  if(error) return $('#taskModalMsg').innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`;
+  closeModal('taskModal'); renderAdmin();
+}
+async function cycleTaskStatus(cacheId){
+  const t = APP.cache[cacheId];
+  const order = ['pending','in_progress','done'];
+  const next = order[(order.indexOf(t.status)+1)%order.length];
+  await APP.sb.from('tasks').update({status:next}).eq('id', t.id);
+  renderAdmin();
+}
+async function deleteTask(id){ if(!confirm('¿Eliminar esta tarea?')) return; await APP.sb.from('tasks').delete().eq('id', id); renderAdmin(); }
+
+/* ---- nómina ---- */
+async function adminNominaTab(){
+  await refreshAbsences();
+  const today = new Date();
+  const defStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+  const defEnd = new Date(today.getFullYear(), today.getMonth()+1, 0).toISOString().slice(0,10);
+  return `
+  <div class="card">
+    <h3>Liquidación de horas trabajadas</h3>
+    <p class="small">Las horas se toman de la marcación real de entrada/salida cuando existe; si un turno fue marcado "Completado" manualmente sin marcación, se usa el horario programado.</p>
+    <div class="row">
+      <div class="field"><label>Desde</label><input type="date" id="pStart" value="${defStart}"></div>
+      <div class="field"><label>Hasta</label><input type="date" id="pEnd" value="${defEnd}"></div>
+    </div>
+    <button class="btn btn-primary" onclick="calcPayroll()">Calcular liquidación</button>
+    <div id="payrollResult" style="margin-top:18px;"></div>
+  </div>`;
+}
+async function calcPayroll(){
+  const start = $('#pStart').value, end = $('#pEnd').value;
+  const box = $('#payrollResult');
+  box.innerHTML = `<p class="small">Calculando…</p>`;
+
+  const {data: existingRun} = await APP.sb.from('payroll_runs').select('*').eq('company_id', APP.session.company_id)
+    .lte('period_start', end).gte('period_end', start);
+  const isLocked = existingRun && existingRun.length>0;
+
+  const emps = await getEmployeesFull();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, time_entries(*)').eq('company_id', APP.session.company_id).gte('shift_date', start).lte('shift_date', end).eq('status','completed');
+  const {data: manualEntries} = await APP.sb.from('time_entries').select('*').eq('company_id', APP.session.company_id).gte('work_date', start).lte('work_date', end).is('shift_id', null);
+
+  const days = (new Date(end) - new Date(start)) / (1000*3600*24) + 1;
+  const weeks = Math.max(days/7, 0.01);
+
+  const results = emps.map(e=>{
+    const empShifts = (shifts||[]).filter(s=>s.employee_id===e.id);
+    let hours = empShifts.reduce((sum,s)=>{
+      const entry = (s.time_entries||[])[0];
+      if(entry && entry.hours_worked){ return sum + Number(entry.hours_worked); }
+      const [sh,sm] = s.start_time.split(':').map(Number);
+      const [eh,em] = s.end_time.split(':').map(Number);
+      let diff = (eh*60+em) - (sh*60+sm);
+      if(diff<0) diff += 24*60;
+      return sum + diff/60;
+    }, 0);
+    const manual = (manualEntries||[]).filter(m=>m.employee_id===e.id).reduce((s,m)=>s+Number(m.hours_worked||0),0);
+    hours += manual;
+    const contracted = e.contracted_hours_week * weeks;
+    const compliance = contracted>0 ? Math.min((hours/contracted)*100, 999) : 0;
+    const amount = hours * Number(e.hourly_rate||0);
+    return {name: e.app_users?.full_name, position:e.position, hours, contracted, compliance, currency:e.currency, amount};
+  });
+
+  APP.cache['_payrollResults'] = results;
+  APP.cache['_payrollRange'] = {start, end};
+  const rows = results.map(r=>`<tr><td><b>${esc(r.name)}</b><div class="small">${esc(r.position||'')}</div></td>
+    <td class="num">${r.hours.toFixed(1)} h</td>
+    <td class="num">${r.contracted.toFixed(1)} h</td>
+    <td class="num">${r.compliance.toFixed(0)}%</td>
+    <td class="num"><b>${fmtMoney(r.amount, r.currency)}</b></td></tr>`).join('');
+  const total = results.reduce((s,r)=>s+r.amount,0);
+  const mainCurrency = results[0]?.currency || APP.companiesCache?.[0]?.default_currency || '';
+  box.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="v num">${results.length}</div><div class="l">Empleados liquidados</div></div>
+      <div class="kpi"><div class="v num">${fmtMoney(total, mainCurrency)}</div><div class="l">Total nómina del periodo</div></div>
+    </div>
+    ${isLocked ? `<div class="locked-note">🔒 Ya existe una liquidación <b>cerrada</b> que se cruza con este periodo. Solo el propietario puede reabrirla para volver a procesarla. Aún puedes exportar esta vista previa a Excel.</div>` : ''}
+    <div class="toolbar"><div></div><div class="actions">
+      <button class="btn btn-accent" onclick="exportPayroll()">Exportar a Excel</button>
+      <button class="btn btn-primary" ${isLocked?'disabled':''} onclick="confirmClosePayroll('${start}','${end}','${esc(mainCurrency)}', ${total}, ${results.length})">Cerrar liquidación de este periodo</button>
+    </div></div>
+    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Horas trabajadas</th><th>Horas pactadas</th><th>Cumplimiento</th><th>Monto a pagar</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-state">No hay empleados o turnos completados en este rango.</td></tr>'}</tbody></table></div>`;
+}
+async function confirmClosePayroll(start, end, currency, total, count){
+  if(!confirm(`¿Cerrar la liquidación del ${start} al ${end}? Una vez cerrada, no podrás volver a procesarla — solo el propietario podrá reabrirla.`)) return;
+  const {error} = await APP.sb.rpc('close_payroll_run', {p_token: tok(), p_period_start: start, p_period_end: end, p_currency: currency, p_total: total, p_employee_count: count});
+  if(error) return alert(error.message);
+  alert('Liquidación cerrada correctamente.');
+  calcPayroll();
+}
+function exportPayroll(){
+  const results = APP.cache['_payrollResults']||[];
+  const data = results.map(r=>({
+    Empleado: r.name, Cargo: r.position, 'Horas trabajadas': +r.hours.toFixed(2), 'Horas pactadas': +r.contracted.toFixed(2),
+    'Cumplimiento %': +r.compliance.toFixed(1), Moneda: r.currency, 'Monto a pagar': +r.amount.toFixed(2)
+  }));
+  exportToExcel(`nomina_${todayISO()}.xlsx`, data);
+}
+
+function adminReportesTab(){
+  return `
+  <div class="card">
+    <h3>Reportes en Excel</h3>
+    <p class="small">Descarga la información de tu empresa lista para análisis o archivo.</p>
+    <div class="toolbar"><div></div><div class="actions">
+      <button class="btn btn-ghost" onclick="reportEmpleados()">Empleados</button>
+      <button class="btn btn-ghost" onclick="reportUbicaciones()">Ubicaciones</button>
+      <button class="btn btn-ghost" onclick="reportTareas()">Tareas</button>
+      <button class="btn btn-ghost" onclick="openReportShiftsModal()">Turnos y horas por rango de fechas</button>
+      <button class="btn btn-ghost" onclick="openReportAbsencesModal()">Inasistencias por rango de fechas</button>
+    </div></div>
+  </div>`;
+}
+async function reportEmpleados(){
+  const emps = await getEmployeesFull();
+  const data = emps.map(e=>({Nombre:e.app_users?.full_name, Usuario:e.app_users?.username, Correo:e.app_users?.email, Cargo:e.position, Ubicacion:e.locations?.name, Tarifa_hora:e.hourly_rate, Moneda:e.currency, Horas_semana:e.contracted_hours_week, Ingreso:e.hire_date, Activo: e.app_users?.active?'Sí':'No'}));
+  exportToExcel(`empleados_${todayISO()}.xlsx`, data);
+}
+async function reportUbicaciones(){
+  const locs = await getLocations();
+  exportToExcel(`ubicaciones_${todayISO()}.xlsx`, locs.map(l=>({Nombre:l.name, Ciudad:l.city, Pais:l.country, Direccion:l.address, Activa:l.active?'Sí':'No'})));
+}
+async function reportTareas(){
+  const {data: tasks} = await APP.sb.from('tasks').select('*, employees:employee_id(*, app_users:user_id(full_name))').eq('company_id', APP.session.company_id);
+  exportToExcel(`tareas_${todayISO()}.xlsx`, (tasks||[]).map(t=>({Titulo:t.title, Descripcion:t.description, Asignado_a:t.employees?.app_users?.full_name||'—', Vence:t.due_date, Estado:t.status, Requiere_foto:t.requires_photo?'Sí':'No'})));
+}
+function openReportShiftsModal(){
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='repShiftModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('repShiftModal')">✕</button>
+  <h3>Exportar turnos y horas por rango de fechas</h3>
+  <div class="row"><div class="field"><label>Desde</label><input type="date" id="rsStart" value="${todayISO()}"></div>
+  <div class="field"><label>Hasta</label><input type="date" id="rsEnd" value="${todayISO()}"></div></div>
+  <button class="btn btn-primary btn-block" onclick="reportShifts()">Exportar</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function reportShifts(){
+  const start = $('#rsStart').value, end = $('#rsEnd').value;
+  await refreshAbsences();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name)), locations:location_id(name), time_entries(*)').eq('company_id', APP.session.company_id).gte('shift_date', start).lte('shift_date', end).order('shift_date');
+  exportToExcel(`turnos_${start}_a_${end}.xlsx`, (shifts||[]).map(s=>{
+    const te = (s.time_entries||[])[0];
+    return {Fecha:s.shift_date, Empleado:s.employees?.app_users?.full_name, Ubicacion:s.locations?.name||'—',
+      Inicio_programado:s.start_time, Fin_programado:s.end_time, Estado:s.status,
+      Entrada_marcada: te?.clock_in ? new Date(te.clock_in).toLocaleString('es-CO') : '—',
+      Salida_marcada: te?.clock_out ? new Date(te.clock_out).toLocaleString('es-CO') : '—',
+      Horas_reales: te?.hours_worked || '—', Notas:s.notes};
+  }));
+  closeModal('repShiftModal');
+}
+function openReportAbsencesModal(){
+  const modal = document.createElement('div'); modal.className='modal-bg'; modal.id='repAbsModal';
+  modal.innerHTML = `<div class="modal"><button class="modal-close" onclick="closeModal('repAbsModal')">✕</button>
+  <h3>Exportar inasistencias por rango de fechas</h3>
+  <div class="row"><div class="field"><label>Desde</label><input type="date" id="raStart" value="${todayISO()}"></div>
+  <div class="field"><label>Hasta</label><input type="date" id="raEnd" value="${todayISO()}"></div></div>
+  <button class="btn btn-primary btn-block" onclick="reportAbsences()">Exportar</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function reportAbsences(){
+  const start = $('#raStart').value, end = $('#raEnd').value;
+  await refreshAbsences();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, employees:employee_id(*, app_users:user_id(full_name)), locations:location_id(name)')
+    .eq('company_id', APP.session.company_id).eq('status','absent').gte('shift_date', start).lte('shift_date', end).order('shift_date');
+  exportToExcel(`inasistencias_${start}_a_${end}.xlsx`, (shifts||[]).map(s=>({
+    Fecha:s.shift_date, Empleado:s.employees?.app_users?.full_name, Cargo:s.employees?.position,
+    Ubicacion:s.locations?.name||'—', Turno_programado:`${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}`, Notas:s.notes
+  })));
+  closeModal('repAbsModal');
+}
+
+function adminAccountTab(){
+  return `<div class="card" style="max-width:420px;"><h3>Cambiar mi clave</h3><div id="apMsg"></div>
+  <div class="field"><label>Nueva clave</label><input id="apPass" type="password"></div>
+  <div class="field"><label>Confirmar</label><input id="apPass2" type="password"></div>
+  <button class="btn btn-primary" onclick="submitAdminPass()">Actualizar clave</button></div>`;
+}
+async function submitAdminPass(){
+  const p1=$('#apPass').value, p2=$('#apPass2').value;
+  if(!p1||p1.length<4) return $('#apMsg').innerHTML=`<div class="msg msg-err">Mínimo 4 caracteres.</div>`;
+  if(p1!==p2) return $('#apMsg').innerHTML=`<div class="msg msg-err">No coinciden.</div>`;
+  await APP.sb.rpc('set_company_user_password', {p_token: tok(), p_user_id: APP.session.id, p_new_password:p1});
+  $('#apMsg').innerHTML = `<div class="msg msg-ok">Clave actualizada.</div>`;
+}
+
+/* =====================================================================
+   VISTA EMPLEADO (solo lectura + cambio de clave propia)
+   ===================================================================== */
+async function renderEmployee(){
+  document.title = 'Turnex · Empleado';
+  const tabs = [['turnos','Mis turnos'],['tareas','Mis tareas'],['cuenta','Mi cuenta']];
+  const nav = tabs.map(([k,l])=>`<button class="${APP.empTab===k?'active':''}" onclick="APP.empTab='${k}';renderEmployee()">${l}</button>`).join('');
+  $('#app').innerHTML = shell(nav, `<div class="empty-state">Cargando…</div>`, 'Empleado');
+  const {data: empRow} = await APP.sb.from('employees').select('*').eq('user_id', APP.session.id).single();
+  APP.cache['_myEmployee'] = empRow;
+  let body = '';
+  if(APP.empTab==='turnos') body = await empTurnosTab(empRow);
+  else if(APP.empTab==='tareas') body = await empTareasTab(empRow);
+  else if(APP.empTab==='cuenta') body = empAccountTab();
+  $('.main').innerHTML = `<h1>Hola, ${esc(APP.session.full_name.split(' ')[0])}</h1><p class="lead">Consulta tus turnos programados y tareas asignadas.</p>${body}`;
+}
+async function empTurnosTab(empRow){
+  if(!empRow) return `<div class="card"><div class="empty-state">Tu perfil de empleado aún no está vinculado. Contacta a tu administrador.</div></div>`;
+  const y = APP.calRefEmp.getFullYear(), m = APP.calRefEmp.getMonth();
+  const first = new Date(y,m,1), last = new Date(y,m+1,0);
+  const startDow = first.getDay();
+  const {data: shifts} = await APP.sb.from('shifts').select('*, locations:location_id(name), time_entries(*)').eq('employee_id', empRow.id)
+    .gte('shift_date', first.toISOString().slice(0,10)).lte('shift_date', last.toISOString().slice(0,10)).order('shift_date');
+  const {data: pendingOvertime} = await APP.sb.from('overtime_requests').select('shift_id').eq('employee_id', empRow.id).eq('status','pending');
+  const pendingShiftIds = new Set((pendingOvertime||[]).map(o=>o.shift_id));
+  APP.cache['_myShifts'] = {};
+  (shifts||[]).forEach(s=> APP.cache['_myShifts'][s.id]=s);
+  const byDay = {};
+  (shifts||[]).forEach(s=>{(byDay[s.shift_date]=byDay[s.shift_date]||[]).push(s);});
+  let cells='';
+  for(let i=0;i<startDow;i++) cells += `<div class="cal-cell empty"></div>`;
+  for(let d=1; d<=last.getDate(); d++){
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayShifts = byDay[dateStr]||[];
+    const isToday = dateStr===todayISO();
+    const tags = dayShifts.map(s=>{
+      const cls = s.status==='absent'?'absent':(s.status==='completed'?'done':'');
+      return `<span class="shift-tag ${cls}">${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}</span>`;
+    }).join('');
+    cells += `<div class="cal-cell ${isToday?'today':''}"><div class="d">${d}</div>${tags}</div>`;
+  }
+  const rows = (shifts||[]).map(s=>{
+    const entry = (s.time_entries||[])[0];
+    let action = '—';
+    if(pendingShiftIds.has(s.id)){
+      action = `<span class="pill pill-pending">Esperando autorización</span>`;
+    } else if(s.status==='scheduled'){
+      action = `<button class="btn btn-primary btn-sm clock-btn" onclick="doClockIn('${s.id}')">Marcar entrada</button>`;
+    } else if(s.status==='in_progress'){
+      action = `<button class="btn btn-accent btn-sm clock-btn" onclick="doClockOut('${s.id}')">Marcar salida</button>`;
+    } else if(s.status==='completed'){
+      action = entry?.clock_in ? `${new Date(entry.clock_in).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})} – ${entry.clock_out? new Date(entry.clock_out).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'—'}` : 'Completado';
+    }
+    return `<tr><td>${s.shift_date}</td><td class="num">${s.start_time?.slice(0,5)}–${s.end_time?.slice(0,5)}</td><td>${esc(s.locations?.name||'—')}</td><td>${statusPill(s.status)}</td><td style="text-align:right;">${action}</td></tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="cal-head"><button class="btn btn-ghost btn-sm" onclick="empShiftMonth(-1)">‹ Anterior</button><h3>${MONTHS[m]} ${y}</h3><button class="btn btn-ghost btn-sm" onclick="empShiftMonth(1)">Siguiente ›</button></div>
+    <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
+  </div>
+  <div class="card">
+    <h3>Mis turnos y marcación</h3>
+    <p class="small">Puedes marcar tu entrada desde 1 minuto antes de la hora programada. Si marcas tu salida después de la hora programada, quedará pendiente de autorización de tu administrador como tiempo complementario/hora extra.</p>
+    <div id="clockMsg"></div>
+    <div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Horario</th><th>Ubicación</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-state">Sin turnos este mes.</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+async function doClockIn(shiftId){
+  const {error} = await APP.sb.rpc('clock_in', {p_token: tok(), p_shift_id: shiftId});
+  const box = $('#clockMsg');
+  if(error){ if(box) box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
+  if(box) box.innerHTML = `<div class="msg msg-ok">Entrada marcada correctamente.</div>`;
+  renderEmployee();
+}
+async function doClockOut(shiftId){
+  const {data, error} = await APP.sb.rpc('clock_out', {p_token: tok(), p_shift_id: shiftId});
+  const box = $('#clockMsg');
+  if(error){ if(box) box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
+  if(data === 'pending'){
+    if(box) box.innerHTML = `<div class="msg msg-ok">Te pasaste de tu hora de salida programada. Tu solicitud de tiempo complementario/hora extra quedó enviada a tu administrador para autorización.</div>`;
+  } else {
+    if(box) box.innerHTML = `<div class="msg msg-ok">Salida marcada correctamente.</div>`;
+  }
+  renderEmployee();
+}
+function empShiftMonth(delta){ APP.calRefEmp.setMonth(APP.calRefEmp.getMonth()+delta); renderEmployee(); }
+async function empTareasTab(empRow){
+  if(!empRow) return '';
+  const {data: tasks} = await APP.sb.from('tasks').select('*, task_photos(*)').or(`employee_id.eq.${empRow.id},employee_id.is.null`).eq('company_id', APP.session.company_id).order('due_date');
+  APP.cache['_myEmpId'] = empRow.id;
+  const rows = (tasks||[]).map(t=>{
+    const cid = saveCache(t);
+    const myPhotos = (t.task_photos||[]).filter(p=>p.employee_id===empRow.id);
+    return `<tr><td><b>${esc(t.title)}</b>${t.requires_photo?'<span class="badge-photo">📷 requiere foto</span>':''}<div class="small">${esc(t.description||'')}</div>
+      ${myPhotos.length? `<div>${myPhotos.map(p=>`<img class="photo-thumb" src="${p.photo_base64}">`).join('')}</div>`:''}</td>
+      <td class="num">${t.due_date||'—'}</td><td>${taskPill(t.status)}</td>
+      <td style="text-align:right;">${t.requires_photo? `<button class="btn btn-accent btn-sm" onclick="triggerTaskPhoto('${cid}')">📷 Tomar foto</button>` : ''}</td></tr>`;
+  }).join('');
+  return `<div class="card"><h3>Mis tareas</h3>
+  <div id="taskPhotoMsg"></div>
+  <div class="table-scroll"><table><thead><tr><th>Tarea</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="4" class="empty-state">No tienes tareas asignadas.</td></tr>'}</tbody></table></div>
+  <input type="file" id="taskPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleTaskPhotoSelected(event)">
+  </div>`;
+}
+function triggerTaskPhoto(cacheId){
+  APP._pendingPhotoTask = cacheId;
+  $('#taskPhotoInput').click();
+}
+function handleTaskPhotoSelected(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const task = APP.cache[APP._pendingPhotoTask];
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    img.onload = async ()=>{
+      const maxW = 1000;
+      const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      const {error} = await APP.sb.from('task_photos').insert({
+        task_id: task.id, employee_id: APP.cache['_myEmpId'], company_id: APP.session.company_id, photo_base64: base64
+      });
+      const box = $('#taskPhotoMsg');
+      if(error){ box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
+      box.innerHTML = `<div class="msg msg-ok">Foto subida correctamente.</div>`;
+      renderEmployee();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
+}
+function empAccountTab(){
+  return `<div class="card" style="max-width:420px;"><h3>Cambiar mi clave</h3><div id="epMsg"></div>
+  <div class="field"><label>Nueva clave</label><input id="epPass" type="password"></div>
+  <div class="field"><label>Confirmar</label><input id="epPass2" type="password"></div>
+  <button class="btn btn-primary" onclick="submitEmpPass()">Actualizar clave</button></div>`;
+}
+async function submitEmpPass(){
+  const p1=$('#epPass').value, p2=$('#epPass2').value;
+  if(!p1||p1.length<4) return $('#epMsg').innerHTML=`<div class="msg msg-err">Mínimo 4 caracteres.</div>`;
+  if(p1!==p2) return $('#epMsg').innerHTML=`<div class="msg msg-err">No coinciden.</div>`;
+  await APP.sb.rpc('set_company_user_password', {p_token: tok(), p_user_id: APP.session.id, p_new_password:p1});
+  $('#epMsg').innerHTML = `<div class="msg msg-ok">Clave actualizada.</div>`;
+}
+
+/* ------------------------- EXCEL ------------------------- */
+function exportToExcel(filename, dataArray){
+  if(!dataArray || dataArray.length===0){ alert('No hay datos para exportar.'); return; }
+  const ws = XLSX.utils.json_to_sheet(dataArray);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+  XLSX.writeFile(wb, filename);
+}
+</script>
+</body>
+</html>
