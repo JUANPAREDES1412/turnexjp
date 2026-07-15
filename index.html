@@ -205,8 +205,8 @@ const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
    La "anon public key" está diseñada para ser pública en apps web.
 --------------------------------------------------------------------- */
 const SUPABASE_CONFIG = {
-  url: 'PEGA_AQUI_TU_SUPABASE_URL',       // ej: https://abcdefgh.supabase.co
-  anonKey: 'PEGA_AQUI_TU_SUPABASE_ANON_KEY'
+  url: 'https://ilvdpsxofivgjqiezqgb.supabase.co',       // ej: https://abcdefgh.supabase.co
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdmRwc3hvZml2Z2pxaWV6cWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDk1OTUsImV4cCI6MjA5Njc4NTU5NX0._YeRr14VRy82Fy2YyiK9HpObdw4sabPtDIvAYZZnPVk'
 };
 function isConfigured(v){ return v && !v.startsWith('PEGA_AQUI'); }
 function getConfigUrl(){ return isConfigured(SUPABASE_CONFIG.url) ? SUPABASE_CONFIG.url : localStorage.getItem('turnex_sb_url'); }
