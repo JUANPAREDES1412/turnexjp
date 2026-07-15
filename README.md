@@ -73,7 +73,21 @@ Con esto:
 - La contraseña (hash) nunca se envía al navegador, sin importar qué se consulte.
 - Si instalas la app **desde cero** hoy, no necesitas `security_upgrade.sql` por separado: ya está incluido dentro de `schema.sql`.
 
-## 🆕 Panel en tiempo real, login unificado y horas extra (aplicar ahora)
+## 🆕 Eliminaciones con aprobación, geolocalización y fotos con fecha (aplicar ahora)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_6.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Eliminación de administradores** (propietario, directo): en la pestaña "Administradores" hay un botón "Eliminar" — como el propietario los crea, puede eliminarlos sin trámite adicional.
+- **Eliminación de empleados, turnos, horas y liquidaciones (con solicitud):** el administrador ya no elimina estos directamente. Debe enviar una solicitud con un motivo, y el propietario la aprueba o rechaza desde su nueva pestaña **"Solicitudes de eliminación"** (con el detalle: qué es, de qué empresa, quién lo pidió, y por qué). Solo al aprobar se elimina de verdad. Los turnos que aún no han ocurrido (programados o cancelados) el administrador todavía puede eliminarlos directamente, ya que no afectan históricos.
+- **Ubicación al marcar entrada.** Cada ubicación ahora tiene coordenadas (con un botón "Usar mi ubicación actual" para completarlas fácilmente desde el navegador del administrador). Cuando el empleado marca su entrada, la app captura su ubicación y la compara contra la de su turno: si está a **500 metros o menos**, queda marcado "En rango"; si no, queda anotado "Fuera de rango" con la distancia. Esta información **solo la ve el administrador o el propietario** (aparece en el Panel principal) — nunca se le muestra al empleado. Si el empleado no otorga permiso de ubicación o su dispositivo no la soporta, igual puede marcar su entrada; solo queda sin verificar.
+- **Fotos de tareas con fecha y hora.** Cada foto de evidencia ahora muestra la fecha y hora exacta en que se subió, tanto para el administrador como para el propio empleado. La app ya solicitaba permiso de cámara/galería de forma nativa a través del selector de archivos del navegador.
+
+## Panel en tiempo real, login unificado y horas extra (aplicar igualmente si no lo habías hecho)
 
 **Para aplicarlo:**
 1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_5.sql` → Run.
