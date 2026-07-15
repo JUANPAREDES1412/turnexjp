@@ -862,3 +862,79 @@ notify pgrst, 'reload config';
 -- FIN. Recuerda subir el nuevo index.html junto con este script — la
 -- app ya está adaptada para llamar estas nuevas funciones.
 -- =====================================================================
+
+
+-- =====================================================================
+-- -- ACTUALIZACIÓN 3 — TURNEX
+-- Ejecutar completo, UNA VEZ, en el SQL Editor de Supabase.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. CORRECCIÓN CRÍTICA: current_session() intentaba releer el token
+--    directamente de los encabezados de la petición, lo cual no es
+--    confiable en todas las configuraciones. Ahora reutiliza las mismas
+--    variables que ya llena rls_context() (la función que SÍ funciona
+--    correctamente para el resto de la app). Esto corrige de un solo
+--    golpe: crear empleados/administradores, restablecer claves,
+--    marcar entrada/salida, cerrar nómina, y copias de seguridad.
+-- ---------------------------------------------------------------------
+create or replace function current_session()
+returns table(actor_type text, company_id uuid, user_id uuid) as $$
+begin
+  return query select
+    nullif(current_setting('app.actor_type', true), '')::text,
+    nullif(current_setting('app.company_id', true), '')::uuid,
+    nullif(current_setting('app.user_id', true), '')::uuid;
+end;
+$$ language plpgsql security definer stable;
+
+-- ---------------------------------------------------------------------
+-- 2. Límite de empleados por empresa (lo define el propietario)
+-- ---------------------------------------------------------------------
+alter table companies add column if not exists max_employees int not null default 50;
+
+-- El administrador puede ver (solo lectura) los datos de SU PROPIA
+-- empresa, para mostrar el límite y el conteo de empleados en su panel.
+drop policy if exists companies_admin_self_read on companies;
+create policy companies_admin_self_read on companies for select
+  using (current_setting('app.actor_type', true) = 'admin'
+         and id::text = current_setting('app.company_id', true));
+
+-- create_company_user ahora también valida el límite de empleados
+-- configurado por el propietario para esa empresa.
+create or replace function create_company_user(
+  p_company_id uuid, p_role user_role, p_username text, p_password text,
+  p_full_name text, p_email text, p_phone text
+) returns uuid as $$
+declare
+  v_id uuid;
+  v_actor text; v_company uuid;
+  v_limit int; v_count int;
+begin
+  select actor_type, company_id into v_actor, v_company from current_session();
+  if v_actor = 'owner' then
+    if p_role <> 'admin' then raise exception 'El propietario solo puede crear administradores.'; end if;
+  elsif v_actor = 'admin' and v_company = p_company_id then
+    if p_role <> 'employee' then raise exception 'Un administrador solo puede crear empleados.'; end if;
+    select max_employees into v_limit from companies where id = p_company_id;
+    select count(*) into v_count from app_users where company_id = p_company_id and role = 'employee';
+    if v_count >= coalesce(v_limit, 50) then
+      raise exception 'Se alcanzó el límite de % empleados permitido para esta empresa. Solo el propietario puede aumentarlo.', v_limit;
+    end if;
+  else
+    raise exception 'No autorizado.';
+  end if;
+
+  insert into app_users (company_id, role, username, password_hash, full_name, email, phone)
+  values (p_company_id, p_role, p_username, crypt(p_password, gen_salt('bf')), p_full_name, p_email, p_phone)
+  returning id into v_id;
+  return v_id;
+end;
+$$ language plpgsql security definer;
+
+notify pgrst, 'reload schema';
+notify pgrst, 'reload config';
+
+-- =====================================================================
+-- FIN. Sube también el nuevo index.html que te entrego junto con esto.
+-- =====================================================================
