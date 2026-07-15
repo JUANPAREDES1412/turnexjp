@@ -73,7 +73,20 @@ Con esto:
 - La contraseña (hash) nunca se envía al navegador, sin importar qué se consulte.
 - Si instalas la app **desde cero** hoy, no necesitas `security_upgrade.sql` por separado: ya está incluido dentro de `schema.sql`.
 
-## 🔧 Corrección definitiva (aplicar ahora) + eliminar empresas
+## 🆕 Panel en tiempo real, login unificado y horas extra (aplicar ahora)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_5.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Panel principal en tiempo real.** Nueva pestaña "Panel" (primera pestaña del administrador): muestra cuántos empleados están en turno ahora mismo, programados, completados y ausentes hoy, más una tabla con la hora real de entrada/salida de cada uno. Se actualiza sola cada 20 segundos.
+- **Login unificado y oculto.** Ya no hay que elegir empresa ni indicar si eres propietario, administrador o empleado — una sola casilla de usuario y clave. La app detecta internamente a quién corresponde y lo lleva a su panel, sin mostrar esa información antes de ingresar.
+- **Autorización de horas extra.** El empleado puede marcar su salida antes o justo a la hora programada sin problema. Si intenta marcarla **después**, la salida no se registra sola — queda como una solicitud de "tiempo complementario/hora extra" pendiente. El administrador la ve en el Panel y puede **Autorizar** (se registra la hora real tardía) o **Rechazar** (se completa el turno con la hora programada, sin la hora extra).
+
+## Corrección definitiva (aplicar igualmente si no lo habías hecho)
 
 El mecanismo anterior para identificar "quién eres" dentro de ciertas funciones seguía sin ser
 confiable en algunos proyectos de Supabase. Se reemplazó por un método más directo: ahora la
