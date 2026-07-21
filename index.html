@@ -1210,17 +1210,19 @@ async function adminNominaTab(){
   return `
   <div class="card">
     <h3>Liquidación de horas trabajadas</h3>
-    <p class="small">Las horas se toman de la marcación real de entrada/salida cuando existe; si un turno fue marcado "Completado" manualmente sin marcación, se usa el horario programado.</p>
+    <p class="small">El pago siempre se calcula con la tarifa acordada × las horas realmente marcadas por el empleado. Las horas que faltaron para cumplir lo pactado se muestran solo como información — nunca se descuentan solas. Si quieres aplicar ese descuento, actívalo abajo antes de calcular.</p>
     <div class="row">
       <div class="field"><label>Desde</label><input type="date" id="pStart" value="${defStart}"></div>
       <div class="field"><label>Hasta</label><input type="date" id="pEnd" value="${defEnd}"></div>
     </div>
+    <div class="field"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="pApplyDiscount" style="width:auto;"> Descontar de la liquidación las horas que no se cumplieron (opcional, decisión manual)</label></div>
     <button class="btn btn-primary" onclick="calcPayroll()">Calcular liquidación</button>
     <div id="payrollResult" style="margin-top:18px;"></div>
   </div>`;
 }
 async function calcPayroll(){
   const start = $('#pStart').value, end = $('#pEnd').value;
+  const applyDiscount = $('#pApplyDiscount').checked;
   const box = $('#payrollResult');
   box.innerHTML = `<p class="small">Calculando…</p>`;
 
@@ -1248,10 +1250,14 @@ async function calcPayroll(){
     }, 0);
     const manual = (manualEntries||[]).filter(m=>m.employee_id===e.id).reduce((s,m)=>s+Number(m.hours_worked||0),0);
     hours += manual;
+    const rate = Number(e.hourly_rate||0);
     const contracted = e.contracted_hours_week * weeks;
+    const missingHours = Math.max(contracted - hours, 0);
     const compliance = contracted>0 ? Math.min((hours/contracted)*100, 999) : 0;
-    const amount = hours * Number(e.hourly_rate||0);
-    return {name: e.app_users?.full_name, position:e.position, hours, contracted, compliance, currency:e.currency, amount};
+    const baseAmount = hours * rate; // siempre: tarifa acordada × horas realmente marcadas
+    const discount = applyDiscount ? missingHours * rate : 0;
+    const amount = baseAmount - discount;
+    return {name: e.app_users?.full_name, position:e.position, hours, contracted, missingHours, compliance, currency:e.currency, baseAmount, discount, amount};
   });
 
   APP.cache['_payrollResults'] = results;
@@ -1259,7 +1265,9 @@ async function calcPayroll(){
   const rows = results.map(r=>`<tr><td><b>${esc(r.name)}</b><div class="small">${esc(r.position||'')}</div></td>
     <td class="num">${r.hours.toFixed(1)} h</td>
     <td class="num">${r.contracted.toFixed(1)} h</td>
+    <td class="num">${r.missingHours>0? '<span class="pill pill-absent">'+r.missingHours.toFixed(1)+' h</span>' : '0 h'}</td>
     <td class="num">${r.compliance.toFixed(0)}%</td>
+    ${applyDiscount? `<td class="num">${fmtMoney(r.discount, r.currency)}</td>` : ''}
     <td class="num"><b>${fmtMoney(r.amount, r.currency)}</b></td></tr>`).join('');
   const total = results.reduce((s,r)=>s+r.amount,0);
   const mainCurrency = results[0]?.currency || APP.companiesCache?.[0]?.default_currency || '';
@@ -1268,6 +1276,7 @@ async function calcPayroll(){
       <div class="kpi"><div class="v num">${results.length}</div><div class="l">Empleados liquidados</div></div>
       <div class="kpi"><div class="v num">${fmtMoney(total, mainCurrency)}</div><div class="l">Total nómina del periodo</div></div>
     </div>
+    ${applyDiscount? `<div class="msg msg-ok">Descuento por horas no cumplidas ACTIVADO para este cálculo — el monto ya incluye ese descuento.</div>` : ''}
     ${isLocked ? `<div class="locked-note">🔒 Ya existe una liquidación <b>cerrada</b> que se cruza con este periodo. Solo el propietario puede reabrirla, o puedes solicitar su eliminación. Aún puedes exportar esta vista previa a Excel.
       <div style="margin-top:8px;"><button class="btn btn-danger btn-sm" onclick="promptRequestDeletion('payroll_run','${existingRun[0].id}')">Solicitar eliminación de esta liquidación</button></div>
     </div>` : ''}
@@ -1275,8 +1284,8 @@ async function calcPayroll(){
       <button class="btn btn-accent" onclick="exportPayroll()">Exportar a Excel</button>
       <button class="btn btn-primary" ${isLocked?'disabled':''} onclick="confirmClosePayroll('${start}','${end}','${esc(mainCurrency)}', ${total}, ${results.length})">Cerrar liquidación de este periodo</button>
     </div></div>
-    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Horas trabajadas</th><th>Horas pactadas</th><th>Cumplimiento</th><th>Monto a pagar</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" class="empty-state">No hay empleados o turnos completados en este rango.</td></tr>'}</tbody></table></div>`;
+    <div class="table-scroll"><table><thead><tr><th>Empleado</th><th>Horas trabajadas</th><th>Horas pactadas</th><th>Horas faltantes</th><th>Cumplimiento</th>${applyDiscount?'<th>Descuento aplicado</th>':''}<th>Monto a pagar</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="${applyDiscount?7:6}" class="empty-state">No hay empleados o turnos completados en este rango.</td></tr>`}</tbody></table></div>`;
 }
 async function confirmClosePayroll(start, end, currency, total, count){
   if(!confirm(`¿Cerrar la liquidación del ${start} al ${end}? Una vez cerrada, no podrás volver a procesarla — solo el propietario podrá reabrirla.`)) return;
@@ -1289,7 +1298,8 @@ function exportPayroll(){
   const results = APP.cache['_payrollResults']||[];
   const data = results.map(r=>({
     Empleado: r.name, Cargo: r.position, 'Horas trabajadas': +r.hours.toFixed(2), 'Horas pactadas': +r.contracted.toFixed(2),
-    'Cumplimiento %': +r.compliance.toFixed(1), Moneda: r.currency, 'Monto a pagar': +r.amount.toFixed(2)
+    'Horas faltantes': +r.missingHours.toFixed(2), 'Cumplimiento %': +r.compliance.toFixed(1), Moneda: r.currency,
+    'Monto base (horas trabajadas)': +r.baseAmount.toFixed(2), 'Descuento aplicado': +r.discount.toFixed(2), 'Monto final a pagar': +r.amount.toFixed(2)
   }));
   exportToExcel(`nomina_${todayISO()}.xlsx`, data);
 }
@@ -1431,6 +1441,8 @@ async function reportHoras(){
   const targetEmps = empId ? emps.filter(e=>e.id===empId) : emps;
   const {data: shifts} = await APP.sb.from('shifts').select('*, time_entries(*)').eq('company_id', APP.session.company_id)
     .gte('shift_date', start).lte('shift_date', end).eq('status','completed');
+  const days = (new Date(end) - new Date(start)) / (1000*3600*24) + 1;
+  const weeks = Math.max(days/7, 0.01);
 
   const results = targetEmps.map(e=>{
     const empShifts = (shifts||[]).filter(s=>s.employee_id===e.id);
@@ -1444,12 +1456,15 @@ async function reportHoras(){
       return sum + diff/60;
     }, 0);
     const rate = Number(e.hourly_rate||0);
+    const contracted = e.contracted_hours_week * weeks;
+    const missingHours = Math.max(contracted - hours, 0);
     const amount = rate * hours; // tarifa por hora × horas reales trabajadas, sin ningún otro cálculo
-    return {Empleado: e.app_users?.full_name, Cargo: e.position, Horas_trabajadas: +hours.toFixed(2), Tarifa_hora: rate, Moneda: e.currency, Monto_a_pagar: +amount.toFixed(2)};
+    return {Empleado: e.app_users?.full_name, Cargo: e.position, Horas_trabajadas: +hours.toFixed(2), Horas_pactadas: +contracted.toFixed(2), Horas_faltantes: +missingHours.toFixed(2), Tarifa_hora: rate, Moneda: e.currency, Monto_a_pagar: +amount.toFixed(2)};
   });
   closeModal('repHorasModal');
   renderReportResult(`Horas y liquidación (${start} a ${end})`, [
     {key:'Empleado',label:'Empleado'},{key:'Cargo',label:'Cargo'},{key:'Horas_trabajadas',label:'Horas trabajadas',num:true},
+    {key:'Horas_pactadas',label:'Horas pactadas',num:true},{key:'Horas_faltantes',label:'Horas faltantes',num:true},
     {key:'Tarifa_hora',label:'Tarifa/hora',num:true},{key:'Moneda',label:'Moneda'},{key:'Monto_a_pagar',label:'Monto a pagar',num:true}
   ], results, `horas_liquidacion_${start}_a_${end}`, results);
 }
