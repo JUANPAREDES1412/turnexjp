@@ -205,8 +205,8 @@ const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
    La "anon public key" está diseñada para ser pública en apps web.
 --------------------------------------------------------------------- */
 const SUPABASE_CONFIG = {
-  url: 'https://ilvdpsxofivgjqiezqgb.supabase.co',       // ej: https://abcdefgh.supabase.co
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsdmRwc3hvZml2Z2pxaWV6cWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDk1OTUsImV4cCI6MjA5Njc4NTU5NX0._YeRr14VRy82Fy2YyiK9HpObdw4sabPtDIvAYZZnPVk'
+  url: 'PEGA_AQUI_TU_SUPABASE_URL',       // ej: https://abcdefgh.supabase.co
+  anonKey: 'PEGA_AQUI_TU_SUPABASE_ANON_KEY'
 };
 function isConfigured(v){ return v && !v.startsWith('PEGA_AQUI'); }
 function getConfigUrl(){ return isConfigured(SUPABASE_CONFIG.url) ? SUPABASE_CONFIG.url : localStorage.getItem('turnex_sb_url'); }
@@ -279,7 +279,10 @@ function saveConfig(){
   location.reload();
 }
 
-function brandMark(){
+function brandMark(logoUrl){
+  if(logoUrl){
+    return `<div class="brand-mark"><img src="${logoUrl}" alt="Logo" style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex:none;"><div><div class="name">Turnex</div><div class="sub">Control de turnos</div></div></div>`;
+  }
   return `<div class="brand-mark"><div class="dot-ring"></div><div><div class="name">Turnex</div><div class="sub">Control de turnos</div></div></div>`;
 }
 
@@ -363,7 +366,7 @@ function shell(navHtml, bodyHtml, roleLabel){
   return `
   <div class="shell">
     <div class="sidebar">
-      ${brandMark()}
+      ${brandMark(APP.session.companyLogo)}
       <nav>${navHtml}</nav>
       <div class="who"><b>${esc(APP.session.full_name||'')}</b>${roleLabel}<br><button class="link-btn" style="color:#fff;opacity:.75;margin-top:10px;" onclick="logout()">Cerrar sesión →</button></div>
     </div>
@@ -497,9 +500,36 @@ function openCompanyModal(cacheId){
         ${[20,50,100,200,1000].map(n=>`<option value="${n}" ${(c?.max_employees||50)===n?'selected':''}>De 1 a ${n} empleados</option>`).join('')}
       </select>
     </div>
+    <div class="field"><label>Logo de la empresa</label>
+      ${c?.logo_url? `<div><img src="${c.logo_url}" style="width:60px;height:60px;border-radius:10px;object-fit:cover;border:1px solid var(--border);margin-bottom:8px;"></div>`:''}
+      <input type="file" accept="image/*" id="cLogoInput" style="display:none;" onchange="handleCompanyLogoSelected(event)">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="$('#cLogoInput').click()">${c?.logo_url?'Cambiar logo':'Subir logo'}</button>
+      <input type="hidden" id="cLogoData" value="${esc(c?.logo_url||'')}">
+    </div>
     <button class="btn btn-primary btn-block" onclick="submitCompany('${c?.id||''}')">${c? 'Guardar cambios':'Crear empresa'}</button>
   </div>`;
   document.body.appendChild(modal);
+}
+function handleCompanyLogoSelected(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    img.onload = ()=>{
+      const maxW = 300;
+      const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL('image/png', 0.85);
+      $('#cLogoData').value = base64;
+      alert('Logo cargado. Se guardará al hacer clic en "Guardar cambios" / "Crear empresa".');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
 }
 function closeModal(id){ const m = document.getElementById(id); if(m) m.remove(); }
 async function submitCompany(existingId){
@@ -513,6 +543,7 @@ async function submitCompany(existingId){
     email: $('#cEmail').value.trim(),
     address: $('#cAddress').value.trim(),
     max_employees: parseInt($('#cMaxEmployees').value, 10) || 50,
+    logo_url: $('#cLogoData').value || null,
   };
   if(!payload.name) return $('#companyModalMsg').innerHTML = `<div class="msg msg-err">El nombre es obligatorio.</div>`;
   let error;
@@ -732,6 +763,10 @@ async function submitOwnerPass(){
 async function renderAdmin(){
   document.title = 'Turnex · Administrador';
   if(APP._panelInterval){ clearInterval(APP._panelInterval); APP._panelInterval = null; }
+  if(APP.session.companyLogo === undefined){
+    const {data: c} = await APP.sb.from('companies').select('logo_url').eq('id', APP.session.company_id).single();
+    APP.session.companyLogo = c?.logo_url || null;
+  }
   const tabs = [['panel','Panel'],['empleados','Empleados'],['ubicaciones','Ubicaciones'],['calendario','Calendario'],['tareas','Tareas'],['nomina','Nómina'],['reportes','Reportes'],['cuenta','Mi cuenta']];
   const nav = tabs.map(([k,l])=>`<button class="${APP.adminTab===k?'active':''}" onclick="APP.adminTab='${k}';renderAdmin()">${l}</button>`).join('');
   $('#app').innerHTML = shell(nav, `<div class="empty-state">Cargando…</div>`, 'Administrador');
@@ -1137,19 +1172,25 @@ async function adminTareasTab(){
   const rows = (tasks||[]).map(t=>{
     const cid = saveCache(t);
     const photoCount = (t.task_photos||[]).length;
+    let cumplimiento = '<span class="small">—</span>';
+    if(t.completed_at){
+      const onTime = !t.due_date || new Date(t.completed_at) <= new Date(t.due_date+'T23:59:59');
+      cumplimiento = `<div class="small">${new Date(t.completed_at).toLocaleString('es-CO')}</div>${onTime? '<span class="pill pill-ok">A tiempo</span>' : '<span class="pill pill-absent">Fuera de plazo</span>'}`;
+    }
     return `<tr><td><b>${esc(t.title)}</b>${t.requires_photo?'<span class="badge-photo">📷 requiere foto</span>':''}<div class="small">${esc(t.description||'')}</div></td>
     <td>${esc(t.employees?.app_users?.full_name || 'Sin asignar')}</td>
     <td class="num">${t.due_date||'—'}</td>
     <td>${taskPill(t.status)}</td>
+    <td>${cumplimiento}</td>
     <td>${photoCount>0? `<button class="link-btn" onclick="viewTaskPhotos('${cid}')">${photoCount} foto(s)</button>` : '<span class="small">—</span>'}</td>
-    <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="cycleTaskStatus('${cid}')">Cambiar estado</button>
+    <td style="text-align:right;"><button class="btn btn-ghost btn-sm" onclick="cycleTaskStatus('${cid}')">${t.status==='done'?'Reabrir':'Marcar finalizada'}</button>
     <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Eliminar</button></td></tr>`;
   }).join('');
   return `
   <div class="card">
     <div class="toolbar"><h3 style="margin:0;">Tareas (${(tasks||[]).length})</h3><div class="actions"><button class="btn btn-primary" onclick="openTaskModal()">+ Nueva tarea</button></div></div>
-    <div class="table-scroll"><table><thead><tr><th>Tarea</th><th>Asignada a</th><th>Vence</th><th>Estado</th><th>Evidencia</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" class="empty-state">No hay tareas registradas.</td></tr>'}</tbody></table></div>
+    <div class="table-scroll"><table><thead><tr><th>Tarea</th><th>Asignada a</th><th>Vence</th><th>Estado</th><th>Finalizada</th><th>Evidencia</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="empty-state">No hay tareas registradas.</td></tr>'}</tbody></table></div>
   </div>`;
 }
 function viewTaskPhotos(cacheId){
@@ -1166,7 +1207,7 @@ function viewTaskPhotos(cacheId){
   document.body.appendChild(modal);
 }
 function taskPill(s){
-  const map = {pending:['pill-pending','Pendiente'], in_progress:['pill-progress','En progreso'], done:['pill-done','Hecha']};
+  const map = {pending:['pill-pending','Pendiente'], done:['pill-done','Finalizada']};
   const [c,l] = map[s]||['pill-pending',s];
   return `<span class="pill ${c}">${l}</span>`;
 }
@@ -1194,9 +1235,9 @@ async function submitTask(){
 }
 async function cycleTaskStatus(cacheId){
   const t = APP.cache[cacheId];
-  const order = ['pending','in_progress','done'];
-  const next = order[(order.indexOf(t.status)+1)%order.length];
-  await APP.sb.from('tasks').update({status:next}).eq('id', t.id);
+  const next = t.status === 'done' ? 'pending' : 'done';
+  const payload = {status: next, completed_at: next==='done' ? new Date().toISOString() : null};
+  await APP.sb.from('tasks').update(payload).eq('id', t.id);
   renderAdmin();
 }
 async function deleteTask(id){ if(!confirm('¿Eliminar esta tarea?')) return; await APP.sb.from('tasks').delete().eq('id', id); renderAdmin(); }
@@ -1356,9 +1397,9 @@ async function reportUbicaciones(){
 }
 async function reportTareas(){
   const {data: tasks} = await APP.sb.from('tasks').select('*, employees:employee_id(*, app_users:user_id(full_name))').eq('company_id', APP.session.company_id);
-  const data = (tasks||[]).map(t=>({Titulo:t.title, Descripcion:t.description, Asignado_a:t.employees?.app_users?.full_name||'—', Vence:t.due_date, Estado:t.status, Requiere_foto:t.requires_photo?'Sí':'No'}));
+  const data = (tasks||[]).map(t=>({Titulo:t.title, Descripcion:t.description, Asignado_a:t.employees?.app_users?.full_name||'—', Vence:t.due_date, Estado:t.status, Finalizada:t.completed_at? new Date(t.completed_at).toLocaleString('es-CO'):'—', Requiere_foto:t.requires_photo?'Sí':'No'}));
   renderReportResult('Tareas', [
-    {key:'Titulo',label:'Tarea'},{key:'Asignado_a',label:'Asignada a'},{key:'Vence',label:'Vence'},{key:'Estado',label:'Estado'},{key:'Requiere_foto',label:'Requiere foto'}
+    {key:'Titulo',label:'Tarea'},{key:'Asignado_a',label:'Asignada a'},{key:'Vence',label:'Vence'},{key:'Estado',label:'Estado'},{key:'Finalizada',label:'Finalizada'},{key:'Requiere_foto',label:'Requiere foto'}
   ], data, 'tareas', data);
 }
 function openReportShiftsModal(){
@@ -1470,10 +1511,43 @@ async function reportHoras(){
 }
 
 function adminAccountTab(){
-  return `<div class="card" style="max-width:420px;"><h3>Cambiar mi clave</h3><div id="apMsg"></div>
+  return `
+  <div class="card" style="max-width:420px;">
+    <h3>Logo de la empresa</h3>
+    <p class="small">Este logo se muestra a ti y a todos los empleados de tu empresa dentro de la app.</p>
+    ${APP.session.companyLogo? `<img src="${APP.session.companyLogo}" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:1px solid var(--border);margin-bottom:10px;">` : '<p class="small">Aún no has subido un logo.</p>'}
+    <div id="logoMsg"></div>
+    <input type="file" accept="image/*" id="logoInput" style="display:none;" onchange="handleLogoSelected(event)">
+    <button class="btn btn-ghost" onclick="$('#logoInput').click()">📷 ${APP.session.companyLogo?'Cambiar logo':'Subir logo'}</button>
+  </div>
+  <div class="card" style="max-width:420px;"><h3>Cambiar mi clave</h3><div id="apMsg"></div>
   <div class="field"><label>Nueva clave</label><input id="apPass" type="password"></div>
   <div class="field"><label>Confirmar</label><input id="apPass2" type="password"></div>
   <button class="btn btn-primary" onclick="submitAdminPass()">Actualizar clave</button></div>`;
+}
+function handleLogoSelected(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    img.onload = async ()=>{
+      const maxW = 300;
+      const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL('image/png', 0.85);
+      const {error} = await APP.sb.from('companies').update({logo_url: base64}).eq('id', APP.session.company_id);
+      const box = $('#logoMsg');
+      if(error){ box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
+      APP.session.companyLogo = base64;
+      renderAdmin();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
 }
 async function submitAdminPass(){
   const p1=$('#apPass').value, p2=$('#apPass2').value;
@@ -1488,6 +1562,10 @@ async function submitAdminPass(){
    ===================================================================== */
 async function renderEmployee(){
   document.title = 'Turnex · Empleado';
+  if(APP.session.companyLogo === undefined){
+    const {data: c} = await APP.sb.from('companies').select('logo_url').eq('id', APP.session.company_id).single();
+    APP.session.companyLogo = c?.logo_url || null;
+  }
   const tabs = [['turnos','Mis turnos'],['tareas','Mis tareas'],['cuenta','Mi cuenta']];
   const nav = tabs.map(([k,l])=>`<button class="${APP.empTab===k?'active':''}" onclick="APP.empTab='${k}';renderEmployee()">${l}</button>`).join('');
   $('#app').innerHTML = shell(nav, `<div class="empty-state">Cargando…</div>`, 'Empleado');
@@ -1589,10 +1667,17 @@ async function empTareasTab(empRow){
   const rows = (tasks||[]).map(t=>{
     const cid = saveCache(t);
     const myPhotos = (t.task_photos||[]).filter(p=>p.employee_id===empRow.id);
+    let action = '';
+    if(t.status !== 'done'){
+      if(t.requires_photo) action = `<button class="btn btn-accent btn-sm" onclick="triggerTaskPhoto('${cid}')">📷 Tomar foto</button>`;
+      else action = `<button class="btn btn-primary btn-sm" onclick="promptFinishTask('${cid}')">Marcar como realizada</button>`;
+    } else {
+      action = `<span class="small">${t.completed_at? new Date(t.completed_at).toLocaleString('es-CO'):''}</span>`;
+    }
     return `<tr><td><b>${esc(t.title)}</b>${t.requires_photo?'<span class="badge-photo">📷 requiere foto</span>':''}<div class="small">${esc(t.description||'')}</div>
       ${myPhotos.length? `<div>${myPhotos.map(p=>`<span style="display:inline-block;text-align:center;"><img class="photo-thumb" src="${p.photo_base64}"><div class="small">${new Date(p.taken_at).toLocaleString('es-CO')}</div></span>`).join('')}</div>`:''}</td>
       <td class="num">${t.due_date||'—'}</td><td>${taskPill(t.status)}</td>
-      <td style="text-align:right;">${t.requires_photo? `<button class="btn btn-accent btn-sm" onclick="triggerTaskPhoto('${cid}')">📷 Tomar foto</button>` : ''}</td></tr>`;
+      <td style="text-align:right;">${action}</td></tr>`;
   }).join('');
   return `<div class="card"><h3>Mis tareas</h3>
   <div id="taskPhotoMsg"></div>
@@ -1600,6 +1685,18 @@ async function empTareasTab(empRow){
   <tbody>${rows || '<tr><td colspan="4" class="empty-state">No tienes tareas asignadas.</td></tr>'}</tbody></table></div>
   <input type="file" id="taskPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleTaskPhotoSelected(event)">
   </div>`;
+}
+function promptFinishTask(cacheId){
+  const t = APP.cache[cacheId];
+  if(!confirm(`¿Ya quedó realizada la tarea "${t.title}"?`)) return;
+  finishTask(t.id);
+}
+async function finishTask(taskId){
+  const {error} = await APP.sb.from('tasks').update({status:'done', completed_at: new Date().toISOString()}).eq('id', taskId);
+  const box = $('#taskPhotoMsg');
+  if(error){ if(box) box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
+  if(box) box.innerHTML = `<div class="msg msg-ok">Tarea marcada como finalizada.</div>`;
+  renderEmployee();
 }
 function triggerTaskPhoto(cacheId){
   APP._pendingPhotoTask = cacheId;
@@ -1625,7 +1722,11 @@ function handleTaskPhotoSelected(ev){
       const box = $('#taskPhotoMsg');
       if(error){ box.innerHTML = `<div class="msg msg-err">${esc(error.message)}</div>`; return; }
       box.innerHTML = `<div class="msg msg-ok">Foto subida correctamente.</div>`;
-      renderEmployee();
+      if(confirm(`¿Ya quedó realizada la tarea "${task.title}" con esta foto?`)){
+        await finishTask(task.id);
+      } else {
+        renderEmployee();
+      }
     };
     img.src = e.target.result;
   };
