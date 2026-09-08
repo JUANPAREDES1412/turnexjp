@@ -73,7 +73,21 @@ Con esto:
 - La contraseña (hash) nunca se envía al navegador, sin importar qué se consulte.
 - Si instalas la app **desde cero** hoy, no necesitas `security_upgrade.sql` por separado: ya está incluido dentro de `schema.sql`.
 
-## 🆕 Eliminaciones con aprobación, geolocalización y fotos con fecha (aplicar ahora)
+## 🆕 Logo de empresa, precisión en horas extra, liquidación al minuto y tareas por el empleado (aplicar ahora)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_7.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Logo de empresa.** El propietario (al crear/editar una empresa) o el administrador (desde "Mi cuenta") puede subir el logo. Se muestra en la barra lateral de todos los administradores y empleados de esa empresa.
+- **Horas extra con margen de 1 minuto.** Antes, marcar la salida un segundo después de la hora programada ya pedía autorización. Ahora hay un margen completo de 1 minuto después de la hora de salida antes de que se considere hora extra — dentro de ese minuto, la salida se registra normal, sin trámite.
+- **Liquidación al minuto exacto.** El pago siempre se calculó con la tarifa por hora × horas trabajadas, y ahora se guarda con más decimales de precisión para reflejar exactamente los minutos y segundos trabajados de más o de menos, sin redondear a la hora completa.
+- **Tareas: el empleado también puede actualizar el estado.** Antes solo el administrador podía. Ahora los estados de tarea se simplificaron a solo **Pendiente** y **Finalizada** (se quitó "En progreso"). Cuando el empleado toma la foto de evidencia requerida, la app le pregunta "¿Ya quedó realizada la tarea?" — si dice que sí, la marca finalizada con la hora exacta; si dice que no, la foto queda guardada pero la tarea sigue pendiente. Para tareas sin foto, tiene un botón "Marcar como realizada" con la misma confirmación. El administrador ve en la pestaña Tareas la fecha límite junto a la fecha/hora real de finalización, con una marca de "A tiempo" o "Fuera de plazo" para medir el cumplimiento.
+
+## Eliminaciones con aprobación, geolocalización y fotos con fecha (aplicar igualmente si no lo habías hecho)
 
 **Para aplicarlo:**
 1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_6.sql` → Run.
