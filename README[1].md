@@ -1,0 +1,225 @@
+# Turnex — Control de Turnos, Nómina y Tareas (multi-empresa)
+
+Aplicación de una sola página (`index.html`), sin necesidad de build ni servidor propio.
+El "backend" es un proyecto Supabase (base de datos Postgres + API).
+
+## Qué incluye
+
+- **Propietario (control total):** crea empresas ilimitadas, crea administradores por empresa, gestiona tasas de cambio, cambia su propia clave.
+- **Administrador de empresa:** crea/edita empleados, ubicaciones, programa turnos en un calendario, asigna tareas, liquida horas trabajadas (con cumplimiento de horas pactadas) en varias monedas, exporta reportes a Excel.
+- **Empleado:** consulta su calendario de turnos, ve sus tareas asignadas, y cambia su propia clave. Sin acceso a nada más (según lo solicitado).
+- Empresas con datos reales de Colombia, EE. UU., España y otros países (NIT/EIN/CIF, moneda por país, etc.).
+- Exportación a Excel (.xlsx) de empleados, ubicaciones, tareas, turnos y nómina — generado en el propio navegador (sin servidor adicional).
+
+## 1. Crear el proyecto en Supabase
+
+1. Ve a https://supabase.com y crea un proyecto nuevo (gratis).
+2. Entra a **SQL Editor → New query**, pega **todo** el contenido de `schema.sql` y dale **Run**.
+3. En el mismo SQL Editor, crea el usuario propietario (una sola vez), reemplazando usuario y clave:
+   ```sql
+   select bootstrap_owner('admin', 'TuClaveSegura123', 'Propietario Principal');
+   ```
+4. Ve a **Project Settings → API** y copia:
+   - **Project URL**
+   - **anon public key**
+
+## 2. Configurar la app
+
+1. Abre `index.html` en el navegador (localmente, o ya publicado en GitHub Pages — ver paso 3).
+2. La primera vez te pedirá la **Supabase URL** y la **anon public key**: pégalas ahí. Se guardan solo en el navegador (localStorage), no quedan en el código.
+3. Inicia sesión en la pestaña **Propietario** con el usuario/clave que creaste con `bootstrap_owner`.
+4. Desde el panel de propietario: crea tu primera empresa, luego crea un administrador para esa empresa (se genera una clave temporal que el administrador deberá cambiar en su primer ingreso).
+5. El administrador inicia sesión en la pestaña **Empresa**, elige su empresa, y ya puede crear empleados, ubicaciones, turnos, tareas y liquidar nómina.
+
+## 3. Subir a GitHub y publicar
+
+```bash
+git init
+git add .
+git commit -m "Turnex: app de control de turnos"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/TU_REPO.git
+git push -u origin main
+```
+
+Para publicarla como sitio web gratuito con GitHub Pages:
+
+1. En GitHub, entra al repositorio → **Settings → Pages**.
+2. En "Source", elige la rama `main` y la carpeta `/ (root)`.
+3. Guarda. En unos minutos tu app estará disponible en `https://TU_USUARIO.github.io/TU_REPO/index.html`.
+
+## Estructura de archivos
+
+- `index.html` — la aplicación completa (interfaz + lógica).
+- `schema.sql` — todas las tablas, funciones y seguridad para Supabase.
+- `README.md` — este archivo.
+
+## ⚠️ Mejora de seguridad importante (aplicar si ya tenías la app instalada)
+
+Si instalaste la app antes de esta actualización, tu base de datos tenía las tablas abiertas
+(cualquier persona con la URL y la llave "anon" podía leer o modificar los datos directamente,
+sin pasar por la app). Esto ya está corregido con un sistema de token de sesión real.
+
+**Para aplicarlo:**
+1. Ve a Supabase → **SQL Editor** → **New query**.
+2. Copia y pega **todo** el contenido de `security_upgrade.sql` y dale **Run**.
+3. Reemplaza tu `index.html` por la nueva versión que te entrego (ya incluye el manejo del token).
+4. Todos los usuarios (propietario, administradores, empleados) deberán volver a iniciar sesión una vez.
+
+Con esto:
+- Ninguna tabla es accesible directamente sin un token de sesión válido (expira a las 12 horas).
+- Un administrador solo puede ver/editar los datos de **su propia empresa**, nunca de otras.
+- Un empleado solo puede **leer** sus propios turnos y tareas — no puede escribir nada ni ver datos de otros empleados.
+- La contraseña (hash) nunca se envía al navegador, sin importar qué se consulte.
+- Si instalas la app **desde cero** hoy, no necesitas `security_upgrade.sql` por separado: ya está incluido dentro de `schema.sql`.
+
+## 📲 Instalar la app en el teléfono (PWA)
+
+Turnex ahora se puede **instalar como una app real** en el celular o tablet — con su propio ícono en la pantalla de inicio y abriéndose en pantalla completa, sin la barra del navegador.
+
+**Archivos nuevos que debes subir a tu repositorio de GitHub, junto a `index.html`** (todos en la misma carpeta raíz, no dentro de una subcarpeta):
+- `manifest.json`
+- `service-worker.js`
+- `icon-192.png`
+- `icon-512.png`
+- `icon-maskable-512.png`
+- `apple-touch-icon.png`
+- `favicon-32.png`
+
+No necesitas cambiar nada en Supabase para esto — es solo la parte visual/de instalación.
+
+**Cómo instalarla, una vez subidos los archivos:**
+
+- **Android (Chrome):** entra a la página publicada. Chrome mostrará un aviso "Agregar Turnex a la pantalla de inicio" automáticamente, o puedes hacerlo manual: menú (⋮) → **Instalar app** / **Agregar a pantalla de inicio**.
+- **iPhone/iPad (Safari):** entra a la página, toca el botón de **Compartir** (el cuadrado con flecha hacia arriba) → **Agregar a pantalla de inicio**. iOS no muestra un aviso automático; este paso manual es necesario siempre en iPhone.
+
+Una vez instalada, cada persona (propietario, administradores, empleados) la abre desde su propio ícono como cualquier otra app — sigue siendo la misma página web por dentro, solo que se ve y se siente como una app nativa.
+
+## Logo de empresa, precisión en horas extra, liquidación al minuto y tareas por el empleado (aplicar igualmente si no lo habías hecho)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_7.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Logo de empresa.** El propietario (al crear/editar una empresa) o el administrador (desde "Mi cuenta") puede subir el logo. Se muestra en la barra lateral de todos los administradores y empleados de esa empresa.
+- **Horas extra con margen de 1 minuto.** Antes, marcar la salida un segundo después de la hora programada ya pedía autorización. Ahora hay un margen completo de 1 minuto después de la hora de salida antes de que se considere hora extra — dentro de ese minuto, la salida se registra normal, sin trámite.
+- **Liquidación al minuto exacto.** El pago siempre se calculó con la tarifa por hora × horas trabajadas, y ahora se guarda con más decimales de precisión para reflejar exactamente los minutos y segundos trabajados de más o de menos, sin redondear a la hora completa.
+- **Tareas: el empleado también puede actualizar el estado.** Antes solo el administrador podía. Ahora los estados de tarea se simplificaron a solo **Pendiente** y **Finalizada** (se quitó "En progreso"). Cuando el empleado toma la foto de evidencia requerida, la app le pregunta "¿Ya quedó realizada la tarea?" — si dice que sí, la marca finalizada con la hora exacta; si dice que no, la foto queda guardada pero la tarea sigue pendiente. Para tareas sin foto, tiene un botón "Marcar como realizada" con la misma confirmación. El administrador ve en la pestaña Tareas la fecha límite junto a la fecha/hora real de finalización, con una marca de "A tiempo" o "Fuera de plazo" para medir el cumplimiento.
+
+## Eliminaciones con aprobación, geolocalización y fotos con fecha (aplicar igualmente si no lo habías hecho)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_6.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Eliminación de administradores** (propietario, directo): en la pestaña "Administradores" hay un botón "Eliminar" — como el propietario los crea, puede eliminarlos sin trámite adicional.
+- **Eliminación de empleados, turnos, horas y liquidaciones (con solicitud):** el administrador ya no elimina estos directamente. Debe enviar una solicitud con un motivo, y el propietario la aprueba o rechaza desde su nueva pestaña **"Solicitudes de eliminación"** (con el detalle: qué es, de qué empresa, quién lo pidió, y por qué). Solo al aprobar se elimina de verdad. Los turnos que aún no han ocurrido (programados o cancelados) el administrador todavía puede eliminarlos directamente, ya que no afectan históricos.
+- **Ubicación al marcar entrada.** Cada ubicación ahora tiene coordenadas (con un botón "Usar mi ubicación actual" para completarlas fácilmente desde el navegador del administrador). Cuando el empleado marca su entrada, la app captura su ubicación y la compara contra la de su turno: si está a **500 metros o menos**, queda marcado "En rango"; si no, queda anotado "Fuera de rango" con la distancia. Esta información **solo la ve el administrador o el propietario** (aparece en el Panel principal) — nunca se le muestra al empleado. Si el empleado no otorga permiso de ubicación o su dispositivo no la soporta, igual puede marcar su entrada; solo queda sin verificar.
+- **Fotos de tareas con fecha y hora.** Cada foto de evidencia ahora muestra la fecha y hora exacta en que se subió, tanto para el administrador como para el propio empleado. La app ya solicitaba permiso de cámara/galería de forma nativa a través del selector de archivos del navegador.
+
+## Panel en tiempo real, login unificado y horas extra (aplicar igualmente si no lo habías hecho)
+
+**Para aplicarlo:**
+1. Supabase → SQL Editor → New query → pega **todo** el contenido de `update_5.sql` → Run.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye:**
+
+- **Panel principal en tiempo real.** Nueva pestaña "Panel" (primera pestaña del administrador): muestra cuántos empleados están en turno ahora mismo, programados, completados y ausentes hoy, más una tabla con la hora real de entrada/salida de cada uno. Se actualiza sola cada 20 segundos.
+- **Login unificado y oculto.** Ya no hay que elegir empresa ni indicar si eres propietario, administrador o empleado — una sola casilla de usuario y clave. La app detecta internamente a quién corresponde y lo lleva a su panel, sin mostrar esa información antes de ingresar.
+- **Autorización de horas extra.** El empleado puede marcar su salida antes o justo a la hora programada sin problema. Si intenta marcarla **después**, la salida no se registra sola — queda como una solicitud de "tiempo complementario/hora extra" pendiente. El administrador la ve en el Panel y puede **Autorizar** (se registra la hora real tardía) o **Rechazar** (se completa el turno con la hora programada, sin la hora extra).
+
+## Corrección definitiva (aplicar igualmente si no lo habías hecho)
+
+El mecanismo anterior para identificar "quién eres" dentro de ciertas funciones seguía sin ser
+confiable en algunos proyectos de Supabase. Se reemplazó por un método más directo: ahora la
+app envía el token de sesión explícitamente como parámetro en cada acción protegida (crear
+administradores/empleados, restablecer claves, marcar entrada/salida, cerrar nómina, copias de
+seguridad), sin depender de configuración adicional del servidor. Esto es más confiable y más
+fácil de verificar si algo falla.
+
+También se agregó: **eliminar una empresa por completo, exclusivo del propietario.** Borra en
+cascada todo lo asociado (administradores, empleados, ubicaciones, turnos, marcaciones, tareas,
+liquidaciones). Pide escribir el nombre exacto de la empresa para confirmar, ya que es
+irreversible.
+
+**Para aplicarlo:**
+1. Supabase → **SQL Editor** → **New query** → pega **todo** el contenido de `update_4.sql` → **Run**.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+## Corrección crítica + límite de empleados (versión anterior — aplicar igualmente si no lo habías hecho)
+
+Se encontró un error real en la actualización anterior: la función que identifica "quién eres"
+al llamar ciertas acciones protegidas no leía el token de sesión de forma confiable. Esto
+afectaba silenciosamente: **crear empleados/administradores, restablecer claves, marcar
+entrada/salida, cerrar nómina, y copias de seguridad.** Ya está corregido.
+
+También se agregó el **límite de empleados por empresa**, que solo el propietario puede definir
+(al crear o editar una empresa, elige entre 20, 50, 100, 200 o 1000 empleados). El panel del
+administrador muestra "Empleados (usados / límite)" y bloquea la creación de nuevos empleados
+al llegar al tope, mostrando un aviso para contactar al propietario.
+
+**Para aplicarlo:**
+1. Supabase → **SQL Editor** → **New query** → pega **todo** el contenido de `update_3.sql` → **Run**.
+2. Reemplaza tu `index.html` por la nueva versión.
+3. Todos deberán volver a iniciar sesión una vez.
+
+## Nuevas funcionalidades (aplicar si ya tenías la app instalada)
+
+**Para aplicarlas:**
+1. En Supabase → **Database → Extensions** → busca **pg_cron** → actívala (necesaria para la copia de seguridad diaria automática).
+2. Ve a **SQL Editor** → **New query** → pega **todo** el contenido de `update_2.sql` → **Run**.
+3. Reemplaza tu `index.html` por la nueva versión que te entrego.
+4. Todos deberán volver a iniciar sesión una vez.
+
+**Qué incluye esta actualización:**
+
+- **Marcación de entrada/salida por el empleado.** El empleado ve un botón "Marcar entrada" en su turno del día, pero solo puede usarlo **desde 1 minuto antes** de la hora programada por el administrador (nunca antes) — esto se valida en la propia base de datos, no solo en la pantalla. Al marcar, el turno pasa a "En curso"; al marcar la salida, pasa a "Completado" y las horas reales quedan registradas para la nómina.
+- **Control de inasistencias.** Si un turno programado ya pasó y el empleado nunca marcó su entrada, la app lo marca automáticamente como "Ausente". Desde Reportes puedes exportar un Excel de inasistencias por rango de fechas.
+- **Nómina simplificada, sin conversión de moneda.** Cada empresa liquida en su propia moneda; ya no hay tasas de cambio ni "Tasas de cambio" en el panel del propietario.
+- **Bloqueo de liquidaciones.** Cuando un administrador cierra la liquidación de un periodo con el botón "Cerrar liquidación de este periodo", ese rango de fechas queda bloqueado — no se puede volver a cerrar. Solo el **propietario** puede reabrirla, desde su pestaña "Liquidaciones cerradas".
+- **Fotos en tareas especiales.** Al crear una tarea, el administrador puede marcar "Requiere foto de evidencia". El empleado verá un botón "Tomar foto" que abre la cámara del celular directamente; la foto queda guardada en la base de datos y visible para el administrador desde la lista de tareas.
+- **Copias de seguridad.** Se genera automáticamente una copia diaria (3:00 a.m. UTC) de toda la información (empresas, usuarios, turnos, tareas, liquidaciones), y se conservan las últimas 30. El propietario puede generar una copia manual, descargarla como archivo, o restaurarla en caso de falla (acción irreversible, protegida con confirmación escrita). Las fotos de tareas no se incluyen en la copia para mantenerla liviana.
+- **Uso desde celular o tablet.** La interfaz ahora se ajusta a pantallas pequeñas: tablas con desplazamiento horizontal, formularios y calendario adaptados, botones de ancho completo en móvil.
+
+## Corrección de seguridad adicional encontrada durante esta actualización
+
+Mientras implementaba lo anterior, detecté que algunas funciones internas (crear usuarios, restablecer claves, y la función que crea al propietario por primera vez) **no verificaban quién las estaba llamando** — cualquier persona con la llave "anon" podría haberlas invocado directamente. Ya quedaron corregidas en `update_2.sql`:
+- `bootstrap_owner` ya no puede usarse para secuestrar la cuenta de un propietario existente.
+- Crear administradores/empleados y restablecer claves ahora verifica que quien lo pide tenga el rol y la empresa correctos.
+- Se separó el cambio de clave "propia" (autoservicio) del restablecimiento "administrativo" (hecho por otra persona), cada uno con su propia función y su propia verificación.
+
+## Notas de seguridad (estado actual)
+
+- Autenticación propia: usuario + clave con hash `bcrypt` (vía `pgcrypto`), no Supabase Auth.
+- Cada login genera un **token de sesión** temporal (12 horas) que la app envía en cada petición.
+  Las políticas de seguridad de la base de datos (RLS) usan ese token para limitar exactamente
+  qué puede ver o modificar cada usuario: el propietario ve todo, un administrador solo su
+  empresa, y un empleado solo puede leer (no escribir) sus propios turnos y tareas.
+- Sin un token válido, la API de Supabase no entrega ni permite modificar ninguna fila —
+  aunque alguien tenga la URL y la llave "anon" a mano.
+- La contraseña (hash) nunca viaja al navegador en ninguna consulta.
+- Si necesitas endurecerlo aún más (por ejemplo, exigir HTTPS estricto, rotar tokens con más
+  frecuencia, o migrar por completo a Supabase Auth), puedo ayudarte a extenderlo.
+
+## Cómo funciona el cálculo de nómina
+
+- Se suman las horas de todos los **turnos marcados como "Completado"** dentro del rango de fechas elegido (más cualquier ajuste manual que se cargue en la tabla `time_entries`).
+- Se compara contra las **horas semanales pactadas** del empleado × número de semanas del periodo, para mostrar el **% de cumplimiento**.
+- El monto se calcula con la **tarifa por hora** y la **moneda propia del empleado**, y se convierte a la moneda que elijas usando las **tasas de cambio** configuradas por el propietario (pestaña "Tasas de cambio").
+- Todo se puede exportar a Excel con un clic.
+
+## Posibles próximos pasos (no incluidos aún)
+
+- Registro de horas reales por reloj (clock-in/clock-out) en vez de solo turnos programados.
+- Notificaciones por correo cuando se asigna un turno o tarea.
+- Aprobación de nómina con firma/estado "pagado".
+- Migración a Supabase Auth con RLS estricto por empresa.
